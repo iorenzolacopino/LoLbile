@@ -40,4 +40,8 @@ capture/
 Thumbs.db
 
 # --- Log files ---
+<<<<<<< HEAD
 *.log
+=======
+*.log
+>>>>>>> 5b5ee983855fd07cab3ed45d95af4d8a4e865152
