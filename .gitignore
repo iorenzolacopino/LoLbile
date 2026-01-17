@@ -1,33 +1,43 @@
-#built application files
-*.apk
-*.ap_
-*.aab
-                           
-# files for the dex VM
-*.dex
-                            
-# Java class files
-*.class
-                            
-# generated files
+# --- Build Artifacts ---
 bin/
 gen/
-                            
-# Local configuration file (sdk path, etc)
-local.properties
-                        
-# Windows thumbnail db
-Thumbs.db
-                
-# OSX files
-.DS_Store
-                            
-# Android Studio
-*.iml
-.idea
-#.idea/workspace.xml - remove # and delete .idea if it better suit your needs.
-.gradle
+out/
 build/
-.navigation
-captures/
-output.json 
+.gradle/
+app/build/
+
+# --- IDE Files (Android Studio / IntelliJ) ---
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/gradle.xml
+.idea/assetWizardSettings.xml
+.idea/dictionaries
+.idea/libraries
+.idea/caches
+.idea/navEditor.xml
+*.iml
+*.ipr
+*.iws
+
+# --- Local Configuration (SENSITIVE) ---
+local.properties
+.bundle/
+
+# --- Keystore / Signing (NEVER COMMIT THESE) ---
+*.jks
+*.keystore
+*.p12
+*.properties
+signing.properties
+
+# --- External Native Build ---
+.externalNativeBuild/
+.cxx/
+capture/
+
+# --- OS Specific ---
+.DS_Store
+Thumbs.db
+
+# --- Log files ---
+*.log
