@@ -3,65 +3,59 @@ package com.example.lolbile
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
-import com.example.lolbile.ui.theme.LoLbileTheme
-import androidx.compose.material3.Surface
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.navigation.compose.*
-import androidx.navigation.NavController
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.material3.*
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Icon
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import androidx.navigation.compose.*
+import com.example.lolbile.ui.theme.LoLbileTheme
+import android.content.ContentValues.TAG
+import android.content.Context
+import android.credentials.GetCredentialException
+import android.os.Build
+import android.util.Log
+import android.widget.Toast
+import androidx.annotation.RequiresApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.credentials.CredentialManager
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialCustomException
+import androidx.credentials.exceptions.NoCredentialException
+import androidx.credentials.GetCredentialRequest
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import java.security.SecureRandom
+import kotlinx.coroutines.CoroutineScope
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.util.Base64
 
 class MainActivity : ComponentActivity() {
+
+    @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -73,6 +67,7 @@ class MainActivity : ComponentActivity() {
                     // view
                     // LoginScreen()
                     Navigation()
+
                 }
             }
         }
@@ -135,17 +130,88 @@ fun LoginScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
-            onClick = {
-                navController.navigate("home")
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Login")
-        }
-
+        ButtonUI()
     }
 }
+
+fun generateSecureRandomNonce(byteLength: Int = 32): String {
+    val randomBytes = ByteArray(byteLength)
+    SecureRandom.getInstanceStrong().nextBytes(randomBytes)
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes)
+}
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+suspend fun signIn(request: GetCredentialRequest, context: Context): Exception? {
+    val credentialManager = CredentialManager.create(context)
+    val failureMessage = "Sign in failed!"
+    var e: Exception? = null
+    //using delay() here helps prevent NoCredentialException when the BottomSheet Flow is triggered
+    //on the initial running of our app
+    delay(2000)
+    try {
+        // The getCredential is called to request a credential from Credential Manager.
+        val result = credentialManager.getCredential(
+            request = request,
+            context = context,
+        )
+        Log.i(TAG, result.toString())
+
+        Toast.makeText(context, "Sign in successful!", Toast.LENGTH_SHORT).show()
+        Log.i(TAG, "Sign in Successful!")
+
+    } catch (e: GetCredentialException) {
+        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
+        Log.e(TAG, failureMessage + ": Failure getting credentials", e)
+
+    } catch (e: GoogleIdTokenParsingException) {
+        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
+        Log.e(TAG, failureMessage + ": Issue with parsing received GoogleIdToken", e)
+
+    } catch (e: NoCredentialException) {
+        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
+        Log.e(TAG, failureMessage + ": No credentials found", e)
+        return e
+
+    } catch (e: GetCredentialCustomException) {
+        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
+        Log.e(TAG, failureMessage + ": Issue with custom credential request", e)
+
+    } catch (e: GetCredentialCancellationException) {
+        Toast.makeText(context, ": Sign-in cancelled", Toast.LENGTH_SHORT).show()
+        Log.e(TAG, failureMessage + ": Sign-in was cancelled", e)
+    }
+    return e
+}
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@Composable
+fun ButtonUI() {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val webClientId = "887270428298-g7ook4kj6hb33egp9s7te9lau92kppdv.apps.googleusercontent.com"
+
+    val onClick: () -> Unit = {
+        val signInWithGoogleOption: GetSignInWithGoogleOption = GetSignInWithGoogleOption
+            .Builder(serverClientId = webClientId)
+            .setNonce(generateSecureRandomNonce())
+            .build()
+
+        val request: GetCredentialRequest = GetCredentialRequest.Builder()
+            .addCredentialOption(signInWithGoogleOption)
+            .build()
+
+        coroutineScope.launch {
+            signIn(request, context)
+        }
+    }
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Text("Login")
+    }
+}
+
 
 @Composable
 fun Navigation() {
