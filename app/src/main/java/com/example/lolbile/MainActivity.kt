@@ -33,6 +33,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,6 +50,10 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingExcept
 import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.clip
+import coil.compose.AsyncImage
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Base64
@@ -74,6 +79,16 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+object UserSession {
+    var userName by mutableStateOf<String?>(null)
+    var userPhotoUrl by mutableStateOf<String?>(null)
+    fun clear() {
+        userName = null
+        userPhotoUrl = null
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun LoginScreen(navController: NavController) {
     Column(
@@ -112,11 +127,8 @@ fun LoginScreen(navController: NavController) {
             label = { Text("Password") },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            // 1. Questa riga oscura il testo
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-            // 2. Imposta la tastiera corretta
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-            // 3. Aggiunge l'icona dell'occhio a destra
             trailingIcon = {
                 val image = if (passwordVisible)
                     Icons.Filled.Visibility
@@ -130,7 +142,7 @@ fun LoginScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        ButtonUI()
+        ButtonUI(navController)
     }
 }
 
@@ -185,7 +197,7 @@ suspend fun signIn(request: GetCredentialRequest, context: Context): Exception? 
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
-fun ButtonUI() {
+fun ButtonUI(navController: NavController) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val webClientId = "887270428298-g7ook4kj6hb33egp9s7te9lau92kppdv.apps.googleusercontent.com"
@@ -201,7 +213,11 @@ fun ButtonUI() {
             .build()
 
         coroutineScope.launch {
-            signIn(request, context)
+            if (signIn(request, context) == null) {
+                navController.navigate("home") {
+                    popUpTo("login") { inclusive = true }
+                }
+            }
         }
     }
     Button(
@@ -213,28 +229,37 @@ fun ButtonUI() {
 }
 
 
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun Navigation() {
     val navController = rememberNavController()
+    val context = LocalContext.current
+    val startDestination =
+        if (GoogleSignIn.getLastSignedInAccount(context) != null) "home"
+        else "login"
     NavHost(
         navController = navController,
-        startDestination = "login"
+        startDestination = startDestination
     ) {
         composable("login") {
             LoginScreen(navController)
         }
         composable("home") {
-            HomeScreen()
+            HomeScreen(navController)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen() {
+fun HomeScreen(navController: NavController) {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Dashboard", "Leaderboard (top 200)", "Matches", "Champion rotations")
     var menuExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val account = GoogleSignIn.getLastSignedInAccount(context)
+    val userName = UserSession.userName
+    val userPhoto = UserSession.userPhotoUrl
     Scaffold(
         topBar = {
             TopAppBar(
@@ -244,16 +269,34 @@ fun HomeScreen() {
                 actions = {
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
-                            Icon(
-                                imageVector = Icons.Default.AccountCircle,
-                                contentDescription = "Avatar"
-                            )
+                            if (userPhoto != null) {
+                                AsyncImage(
+                                    model = userPhoto,
+                                    contentDescription = "Profile picture",
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.AccountCircle,
+                                    contentDescription = "Avatar"
+                                )
+                            }
                         }
 
                         DropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
+                            userName?.let { name ->
+                                DropdownMenuItem(
+                                    text = { Text(name, fontWeight = FontWeight.Bold) },
+                                    onClick = {},
+                                    enabled = false
+                                )
+                            }
+                            Divider()
                             DropdownMenuItem(
                                 text = { Text("Settings") },
                                 onClick = {
@@ -265,7 +308,16 @@ fun HomeScreen() {
                                 text = { Text("Logout") },
                                 onClick = {
                                     menuExpanded = false
-                                    // TODO
+                                    val googleSignInClient = GoogleSignIn.getClient(
+                                        context,
+                                        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
+                                    )
+                                    googleSignInClient.signOut().addOnCompleteListener {
+                                        UserSession.clear()
+                                        navController.navigate("login") {
+                                            popUpTo("home") { inclusive = true }
+                                        }
+                                    }
                                 }
                             )
                         }
