@@ -51,6 +51,8 @@ dependencies {
     implementation(libs.androidx.compose.material3.adaptive.navigation.suite)
     implementation(libs.firebase.crashlytics.buildtools)
     implementation(libs.play.services.auth)
+    implementation(libs.androidx.ui.graphics)
+    implementation(libs.androidx.compose.ui.text)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -64,4 +66,8 @@ dependencies {
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0-rc01")
     implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.android.gms:play-services-auth:21.0.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("com.google.android.gms:play-services-location:21.0.1")
 }

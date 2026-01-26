@@ -51,12 +51,28 @@ import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextDecoration
 import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
 import java.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
 
@@ -69,10 +85,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ){
-                    // view
-                    // LoginScreen()
                     Navigation()
-
                 }
             }
         }
@@ -82,9 +95,11 @@ class MainActivity : ComponentActivity() {
 object UserSession {
     var userName by mutableStateOf<String?>(null)
     var userPhotoUrl by mutableStateOf<String?>(null)
+    var appAuthToken by mutableStateOf<String?>(null)
     fun clear() {
         userName = null
         userPhotoUrl = null
+        appAuthToken = null
     }
 }
 
@@ -141,8 +156,81 @@ fun LoginScreen(navController: NavController) {
         )
 
         Spacer(modifier = Modifier.height(24.dp))
-
+        Text("or", color = Color.Gray)
+        Spacer(modifier = Modifier.height(16.dp))
         ButtonUI(navController)
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        TextButton(
+            onClick = { navController.navigate("register") }
+        ) {
+            Text(
+                text = "If it's your first time here, register",
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    navController.navigate("register")
+                },
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    textDecoration = TextDecoration.Underline
+                )
+            )
+        }
+
+    }
+}
+
+@Composable
+fun RegisterScreen(navController: NavController) {
+
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+
+        Text("Create account", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+
+        Spacer(Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = email,
+            onValueChange = { email = it },
+            label = { Text("Email") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        OutlinedTextField(
+            value = password,
+            onValueChange = { password = it },
+            label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation()
+        )
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                // backend
+                // registerUser(email, password)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Register")
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        TextButton(onClick = { navController.navigate("login") }) {
+            Text("Already have an account? Login")
+        }
     }
 }
 
@@ -153,13 +241,14 @@ fun generateSecureRandomNonce(byteLength: Int = 32): String {
 }
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-suspend fun signIn(request: GetCredentialRequest, context: Context): Exception? {
+suspend fun signIn(request: GetCredentialRequest, context: Context): Boolean {
     val credentialManager = CredentialManager.create(context)
-    val failureMessage = "Sign in failed!"
-    var e: Exception? = null
+    // val failureMessage = "Sign in failed!"
+    // var e: Exception? = null
     //using delay() here helps prevent NoCredentialException when the BottomSheet Flow is triggered
     //on the initial running of our app
     delay(2000)
+    /*
     try {
         // The getCredential is called to request a credential from Credential Manager.
         val result = credentialManager.getCredential(
@@ -193,6 +282,65 @@ suspend fun signIn(request: GetCredentialRequest, context: Context): Exception? 
         Log.e(TAG, failureMessage + ": Sign-in was cancelled", e)
     }
     return e
+    */
+    return try {
+        val result = credentialManager.getCredential(context = context, request = request)
+        val credential = result.credential
+        if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+            val googleIdTokenCredential = GoogleIdTokenCredential.createFrom(credential.data)
+            UserSession.userName = googleIdTokenCredential.displayName
+            UserSession.userPhotoUrl = googleIdTokenCredential.profilePictureUri?.toString()
+            val idToken = googleIdTokenCredential.idToken
+            val backendToken = sendGoogleTokenToBackend(idToken)
+            if (backendToken != null) {
+                UserSession.appAuthToken = backendToken
+                Log.d("LOGIN_DEBUG", "Backend token saved")
+                true
+            } else {
+                Log.e("LOGIN_DEBUG", "Backend auth failed")
+                false
+            }
+        } else {
+            Log.e("LOGIN_DEBUG", "Credential type not supported: ${credential.type}")
+            false
+        }
+    } catch (e: GetCredentialException) {
+        Log.e("LOGIN_DEBUG", "Credential Manager Error: ${e.message}")
+        false
+    } catch (e: Exception) {
+        Log.e("LOGIN_DEBUG", "Generic error", e)
+        false
+    }
+}
+
+suspend fun sendGoogleTokenToBackend(idToken: String): String? {
+    return withContext(Dispatchers.IO) {
+        try {
+            val client = OkHttpClient()
+
+            val json = JSONObject()
+            json.put("idToken", idToken)
+
+            val body = json.toString()
+                .toRequestBody("application/json".toMediaType())
+
+            val request = Request.Builder()
+                .url("https://YOUR_BACKEND/auth/google")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+
+                val responseBody = JSONObject(response.body!!.string())
+                responseBody.getString("token")   // JWT del backend
+            }
+
+        } catch (e: Exception) {
+            Log.e("BACKEND_AUTH", "Error", e)
+            null
+        }
+    }
 }
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
@@ -213,40 +361,72 @@ fun ButtonUI(navController: NavController) {
             .build()
 
         coroutineScope.launch {
-            if (signIn(request, context) == null) {
+            val success = signIn(request, context)
+            if (success) {
                 navController.navigate("home") {
                     popUpTo("login") { inclusive = true }
                 }
             }
         }
+        testHTTP()
     }
     Button(
         onClick = onClick,
+        colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Text("Login")
+        Spacer(Modifier.width(8.dp))
+        Text("Login with Google", color = Color.White)
     }
 }
 
+fun verifyToken() {
+    val client = OkHttpClient()
+    val JSON = "application/json; charset=utf-8".toMediaType()
+    @Throws(IOException::class)
+    fun post(url: String, json: String): String? {
+        val body = json.toRequestBody(JSON)
+        val request = Request.Builder()
+            .url(url)
+            .post(body)
+            .build()
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IOException("Unexpected code $response")
+            return response.body?.string()
+        }
+    }
+}
+/*
+private fun handleSignInResult(@NonNull Task<GoogleSignInAccount> completedTask) {
+    try {
+        GoogleSignInAccount account = completedTask.getResult (ApiException.class);
+        String idToken = account.getIdToken();
+        verifyToken()
+    } catch (ApiException e) {
+        Log.w(TAG, "handleSignInResult:error", e);
+    }
+}
+
+fun registerUser()
+
+fun findUser()
+ */
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun Navigation() {
     val navController = rememberNavController()
     val context = LocalContext.current
-    val startDestination =
-        if (GoogleSignIn.getLastSignedInAccount(context) != null) "home"
-        else "login"
+    LaunchedEffect(Unit) {
+        restoreGoogleSession(context)
+    }
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = "home"
     ) {
-        composable("login") {
-            LoginScreen(navController)
-        }
-        composable("home") {
-            HomeScreen(navController)
-        }
+        composable("home") { HomeScreen(navController) }
+        composable("login") { LoginScreen(navController) }
+        composable("register") { RegisterScreen(navController) }
     }
 }
 
@@ -260,6 +440,7 @@ fun HomeScreen(navController: NavController) {
     val account = GoogleSignIn.getLastSignedInAccount(context)
     val userName = UserSession.userName
     val userPhoto = UserSession.userPhotoUrl
+    val isLogged = userName != null
     Scaffold(
         topBar = {
             TopAppBar(
@@ -289,37 +470,37 @@ fun HomeScreen(navController: NavController) {
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
-                            userName?.let { name ->
+
+                            if (isLogged) {
                                 DropdownMenuItem(
-                                    text = { Text(name, fontWeight = FontWeight.Bold) },
+                                    text = { Text(userName!!, fontWeight = FontWeight.Bold) },
                                     onClick = {},
                                     enabled = false
                                 )
-                            }
-                            Divider()
-                            DropdownMenuItem(
-                                text = { Text("Settings") },
-                                onClick = {
-                                    menuExpanded = false
-                                    // TODO
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Logout") },
-                                onClick = {
-                                    menuExpanded = false
-                                    val googleSignInClient = GoogleSignIn.getClient(
-                                        context,
-                                        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN).build()
-                                    )
-                                    googleSignInClient.signOut().addOnCompleteListener {
+                                Divider()
+
+                                DropdownMenuItem(
+                                    text = { Text("Settings") },
+                                    onClick = { menuExpanded = false }
+                                )
+
+                                DropdownMenuItem(
+                                    text = { Text("Logout") },
+                                    onClick = {
                                         UserSession.clear()
-                                        navController.navigate("login") {
-                                            popUpTo("home") { inclusive = true }
-                                        }
+                                        menuExpanded = false
                                     }
-                                }
-                            )
+                                )
+
+                            } else {
+                                DropdownMenuItem(
+                                    text = { Text("Login") },
+                                    onClick = {
+                                        menuExpanded = false
+                                        navController.navigate("login")
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -353,6 +534,35 @@ fun HomeScreen(navController: NavController) {
         }
     }
 }
+
+fun restoreGoogleSession(context: Context) {
+    val account = GoogleSignIn.getLastSignedInAccount(context)
+    account?.let {
+        UserSession.userName = it.displayName
+        UserSession.userPhotoUrl = it.photoUrl?.toString()
+    }
+}
+
+// funzione di testing
+fun testHTTP() {
+    val client = OkHttpClient()
+    val url = "https://reqres.in/api/users?page=2"
+    val request = Request.Builder().url(url).build()
+    Log.d("CHIAMA_FUNZIONE", "chiamando la funzione")
+    client.newCall(request).enqueue(object: Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            e.printStackTrace()
+        }
+        override fun onResponse(call: Call, response: Response) {
+            Log.d("VEDIAMO", response.code.toString())
+            if (response.isSuccessful) {
+                Log.d("RESPONSE_BODY", response.body!!.toString())
+            }
+            Log.d("SUCCESSO", "response completed")
+        }
+    })
+}
+
 
 @Composable
 fun Dashboard() {
