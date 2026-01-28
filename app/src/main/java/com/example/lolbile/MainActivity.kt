@@ -31,9 +31,16 @@ import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.rememberCoroutineScope
@@ -52,6 +59,8 @@ import kotlinx.coroutines.CoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
@@ -156,6 +165,19 @@ fun LoginScreen(navController: NavController) {
         )
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                // backend
+                // loginUser(email, password)
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Login")
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         Text("or", color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
         ButtonUI(navController)
@@ -182,17 +204,15 @@ fun LoginScreen(navController: NavController) {
 
 @Composable
 fun RegisterScreen(navController: NavController) {
-
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-
+    var passwordVisible by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
         Text("Create account", fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
         Spacer(Modifier.height(32.dp))
@@ -211,7 +231,18 @@ fun RegisterScreen(navController: NavController) {
             onValueChange = { password = it },
             label = { Text("Password") },
             modifier = Modifier.fillMaxWidth(),
-            visualTransformation = PasswordVisualTransformation()
+            singleLine = true,
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            trailingIcon = {
+                val image = if (passwordVisible)
+                    Icons.Filled.Visibility
+                else Icons.Filled.VisibilityOff
+
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(imageVector = image, contentDescription = "Toggle password visibility")
+                }
+            }
         )
 
         Spacer(Modifier.height(24.dp))
@@ -243,46 +274,7 @@ fun generateSecureRandomNonce(byteLength: Int = 32): String {
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 suspend fun signIn(request: GetCredentialRequest, context: Context): Boolean {
     val credentialManager = CredentialManager.create(context)
-    // val failureMessage = "Sign in failed!"
-    // var e: Exception? = null
-    //using delay() here helps prevent NoCredentialException when the BottomSheet Flow is triggered
-    //on the initial running of our app
     delay(2000)
-    /*
-    try {
-        // The getCredential is called to request a credential from Credential Manager.
-        val result = credentialManager.getCredential(
-            request = request,
-            context = context,
-        )
-        Log.i(TAG, result.toString())
-
-        Toast.makeText(context, "Sign in successful!", Toast.LENGTH_SHORT).show()
-        Log.i(TAG, "Sign in Successful!")
-
-    } catch (e: GetCredentialException) {
-        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
-        Log.e(TAG, failureMessage + ": Failure getting credentials", e)
-
-    } catch (e: GoogleIdTokenParsingException) {
-        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
-        Log.e(TAG, failureMessage + ": Issue with parsing received GoogleIdToken", e)
-
-    } catch (e: NoCredentialException) {
-        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
-        Log.e(TAG, failureMessage + ": No credentials found", e)
-        return e
-
-    } catch (e: GetCredentialCustomException) {
-        Toast.makeText(context, failureMessage, Toast.LENGTH_SHORT).show()
-        Log.e(TAG, failureMessage + ": Issue with custom credential request", e)
-
-    } catch (e: GetCredentialCancellationException) {
-        Toast.makeText(context, ": Sign-in cancelled", Toast.LENGTH_SHORT).show()
-        Log.e(TAG, failureMessage + ": Sign-in was cancelled", e)
-    }
-    return e
-    */
     return try {
         val result = credentialManager.getCredential(context = context, request = request)
         val credential = result.credential
@@ -441,13 +433,35 @@ fun HomeScreen(navController: NavController) {
     val userName = UserSession.userName
     val userPhoto = UserSession.userPhotoUrl
     val isLogged = userName != null
+    var searchText by remember { mutableStateOf("") }
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
-                    Text("LoLbile")
-                },
-                actions = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { selectedTab = 0 }) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Home"
+                        )
+                    }
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "LoLbile",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+                    }
                     Box {
                         IconButton(onClick = { menuExpanded = true }) {
                             if (userPhoto != null) {
@@ -465,12 +479,10 @@ fun HomeScreen(navController: NavController) {
                                 )
                             }
                         }
-
                         DropdownMenu(
                             expanded = menuExpanded,
                             onDismissRequest = { menuExpanded = false }
                         ) {
-
                             if (isLogged) {
                                 DropdownMenuItem(
                                     text = { Text(userName!!, fontWeight = FontWeight.Bold) },
@@ -478,12 +490,10 @@ fun HomeScreen(navController: NavController) {
                                     enabled = false
                                 )
                                 Divider()
-
                                 DropdownMenuItem(
                                     text = { Text("Settings") },
                                     onClick = { menuExpanded = false }
                                 )
-
                                 DropdownMenuItem(
                                     text = { Text("Logout") },
                                     onClick = {
@@ -491,7 +501,6 @@ fun HomeScreen(navController: NavController) {
                                         menuExpanded = false
                                     }
                                 )
-
                             } else {
                                 DropdownMenuItem(
                                     text = { Text("Login") },
@@ -504,7 +513,40 @@ fun HomeScreen(navController: NavController) {
                         }
                     }
                 }
-            )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { searchText = it },
+                    placeholder = { Text("Search players...") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    shape = RoundedCornerShape(20),
+                    leadingIcon = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (searchText.isNotEmpty()) {
+                            Button(
+                                onClick = { /* search */ },
+                                modifier = Modifier
+                                    .padding(end = 8.dp)
+                                    .height(36.dp),
+                                shape = RoundedCornerShape(12.dp),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
+                            ) {
+                                Text(
+                                    text = "Go",
+                                    style = MaterialTheme.typography.labelLarge
+                                )
+                            }
+                        }
+                    }
+                )
+            }
         }
     ) { paddingValues ->
         Column(
@@ -526,10 +568,10 @@ fun HomeScreen(navController: NavController) {
                 }
             }
             when (selectedTab) {
-                0 -> Dashboard()
+                0 -> Dashboard(isLogged)
                 1 -> Leaderboard()
-                2 -> Matches()
-                3 -> ChampionRotations()
+                2 -> Matches(isLogged)
+                3 -> ChampionRotations(isLogged)
             }
         }
     }
@@ -565,12 +607,36 @@ fun testHTTP() {
 
 
 @Composable
-fun Dashboard() {
+fun Dashboard(isLogged: Boolean) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text("Dashboard", fontSize = 22.sp)
+        if (isLogged) {
+            Text("Dashboard", fontSize = 22.sp)
+        }
+        else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "As an unauthenticated user you can only search players.",
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray,
+                    lineHeight = 24.sp
+                )
+            }
+        }
     }
 }
 
@@ -585,21 +651,69 @@ fun Leaderboard() {
 }
 
 @Composable
-fun Matches() {
+fun Matches(isLogged: Boolean) {
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text("Matches", fontSize = 22.sp)
+        if (isLogged) {
+            Text("Matches", fontSize = 22.sp)
+        }
+        else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "As an unauthenticated user you can only search players.",
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray,
+                    lineHeight = 24.sp
+                )
+            }
+        }
     }
 }
 
 @Composable
-fun ChampionRotations(){
+fun ChampionRotations(isLogged: Boolean){
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
-        Text(text = "Champion rotations", fontSize = 22.sp)
+        if (isLogged) {
+            Text("Champion rotations", fontSize = 22.sp)
+        }
+        else {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    modifier = Modifier.size(48.dp),
+                    tint = Color.Gray
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "As an unauthenticated user you can only search players.",
+                    fontSize = 18.sp,
+                    textAlign = TextAlign.Center,
+                    color = Color.Gray,
+                    lineHeight = 24.sp
+                )
+            }
+        }
     }
 }
