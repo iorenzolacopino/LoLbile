@@ -5,6 +5,11 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("C:\\Users\\filip\\Desktop\\debug.keystore")
+        }
+    }
     namespace = "com.example.lolbile"
     compileSdk = 35
 
@@ -72,4 +77,5 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("com.google.android.gms:play-services-location:21.0.1")
     implementation("com.google.code.gson:gson:2.8.5")
+    implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
 }

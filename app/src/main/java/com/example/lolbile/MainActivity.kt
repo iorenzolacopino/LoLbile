@@ -22,24 +22,18 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.*
 import com.example.lolbile.ui.theme.LoLbileTheme
-import android.content.ContentValues.TAG
 import android.content.Context
 import android.credentials.GetCredentialException
 import android.net.Uri
 import android.os.Build
 import android.util.Log
-import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
@@ -47,21 +41,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.credentials.CredentialManager
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialCustomException
-import androidx.credentials.exceptions.NoCredentialException
 import androidx.credentials.GetCredentialRequest
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import java.security.SecureRandom
-import kotlinx.coroutines.CoroutineScope
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -69,12 +55,7 @@ import androidx.navigation.NavType
 import androidx.navigation.navArgument
 import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.auth.api.signin.GoogleSignInAccount
-import com.google.android.gms.auth.api.signin.GoogleSignInOptions
-import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.firebase.crashlytics.buildtools.reloc.com.google.common.net.MediaType
-import com.google.firebase.crashlytics.buildtools.reloc.org.apache.http.client.methods.RequestBuilder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.Call
@@ -88,8 +69,8 @@ import java.io.IOException
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.RequestBody
 import org.json.JSONObject
+import ru.gildor.coroutines.okhttp.await
 
 class MainActivity : ComponentActivity() {
 
@@ -280,10 +261,10 @@ fun generateSecureRandomNonce(byteLength: Int = 32): String {
 }
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-suspend fun signIn(request: GetCredentialRequest, context: Context): Boolean {
+suspend fun signIn(request: GetCredentialRequest, context: Context): String {
     val credentialManager = CredentialManager.create(context)
     delay(2000)
-    return try {
+    try {
         val result = credentialManager.getCredential(context = context, request = request)
         val credential = result.credential
         if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
@@ -291,51 +272,20 @@ suspend fun signIn(request: GetCredentialRequest, context: Context): Boolean {
             UserSession.userName = googleIdTokenCredential.displayName
             UserSession.userPhotoUrl = googleIdTokenCredential.profilePictureUri?.toString()
             val idToken = googleIdTokenCredential.idToken
-            loginWithToken(idToken)
-            true
+            val redirect = loginWithToken(idToken)
+            return redirect
         } else {
             Log.e("LOGIN_DEBUG", "Credential type not supported: ${credential.type}")
-            false
+            return "err"
         }
     } catch (e: GetCredentialException) {
         Log.e("LOGIN_DEBUG", "Credential Manager Error: ${e.message}")
-        false
+        return "err"
     } catch (e: Exception) {
         Log.e("LOGIN_DEBUG", "Generic error", e)
-        false
+        return "err"
     }
 }
-
-suspend fun sendGoogleTokenToBackend(idToken: String): String? {
-    return withContext(Dispatchers.IO) {
-        try {
-            val client = OkHttpClient()
-
-            val json = JSONObject()
-            json.put("idToken", idToken)
-
-            val body = json.toString()
-                .toRequestBody("application/json".toMediaType())
-
-            val request = Request.Builder()
-                .url("https://YOUR_BACKEND/auth/google")
-                .post(body)
-                .build()
-
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@withContext null
-
-                val responseBody = JSONObject(response.body!!.string())
-                responseBody.getString("token")   // JWT del backend
-            }
-
-        } catch (e: Exception) {
-            Log.e("BACKEND_AUTH", "Error", e)
-            null
-        }
-    }
-}
-
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun ButtonUI(navController: NavController) {
@@ -346,18 +296,32 @@ fun ButtonUI(navController: NavController) {
     val onClick: () -> Unit = {
         val signInWithGoogleOption: GetSignInWithGoogleOption = GetSignInWithGoogleOption
             .Builder(serverClientId = webClientId)
-            .setNonce(generateSecureRandomNonce())
             .build()
 
         val request: GetCredentialRequest = GetCredentialRequest.Builder()
             .addCredentialOption(signInWithGoogleOption)
             .build()
-
         coroutineScope.launch {
-            val success = signIn(request, context)
-            if (success) {
-                navController.navigate("home") {
-                    popUpTo("login") { inclusive = true }
+            val message = signIn(request, context)
+            when (message) {
+                "create_account" -> {
+                    // registrazione
+                    Log.i("REGISTER", "No account, redirecting to registration page")
+
+                }
+
+                "fuse_account" -> {
+                    // Richiedi login
+                    Log.i("FUSE", "Linking account")
+
+                }
+
+                "login_ok" -> {
+                    navController.navigate("home") {
+                        popUpTo("login") {
+                            inclusive = true
+                        }
+                    }
                 }
             }
         }
@@ -372,7 +336,7 @@ fun ButtonUI(navController: NavController) {
     }
 }
 
-fun loginWithToken(googleToken: String) {
+suspend fun loginWithToken(googleToken: String): String{
     val json = "{\"token\":\"${googleToken}\"}"
     val mediaType = "application/json; charset=utf-8".toMediaType()
     val requestBody = json.toRequestBody(mediaType)
@@ -382,46 +346,40 @@ fun loginWithToken(googleToken: String) {
         .url(url)
         .post(requestBody)
         .build()
-    client.newCall(request).execute().use { response ->
-        if (!response.isSuccessful) throw IOException("Unexpected code $response")
-        try {
-            val jsonData = response.body!!.string()
-            val jsonObj = JSONObject(jsonData)
-            val message = jsonObj.getString("message")
-            when (message) {
-                "create_account" -> {
-                    // registrazione
-                    Log.i("REGISTER", "No account, redirecting to registration page")
-                }
+    val response = client.newCall(request).await()
+    var result = "err"
+    if (!response.isSuccessful) throw IOException("Unexpected code $response")
+    try {
+        val jsonData = response.body!!.string()
+        val jsonObj = JSONObject(jsonData)
+        val message = jsonObj.getString("message")
+        when (message) {
+            "create_account" -> {
+                // registrazione
+                Log.i("REGISTER", "No account, redirecting to registration page")
+                result = "create_account"
+            }
 
-                "fuse_account" -> {
-                    // richiedi login
-                    Log.i("FUSE", "Linking account")
-                }
+            "fuse_account" -> {
+                // Richiedi login
+                Log.i("FUSE", "Linking account")
+                result = "fuse_account"
+            }
 
-                "login_ok" -> {
-                    // tutto ok (jwt token)
-                    UserSession.appAuthToken = jsonObj.getString("token")
-                    Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
-                }
+            "login_ok" -> {
+                // tutto ok (jwt token)
+                UserSession.appAuthToken = jsonObj.getString("token")
+                Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
+                result = "login_ok"
             }
         }
-        catch (e: Exception)  {
-            Log.e("SERVER_ERROR", "Server error")
-        }
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
+        result = "err"
     }
+    return result
 }
 /*
-private fun handleSignInResult(@NonNull Task<GoogleSignInAccount> completedTask) {
-    try {
-        GoogleSignInAccount account = completedTask.getResult (ApiException.class);
-        String idToken = account.getIdToken();
-        verifyToken()
-    } catch (ApiException e) {
-        Log.w(TAG, "handleSignInResult:error", e);
-    }
-}
-
 fun registerUser()
 
 fun findUser()
@@ -511,11 +469,11 @@ fun TopLayout(
                 ) {
                     if (isLogged) {
                         DropdownMenuItem(
-                            text = { Text(userName!!, fontWeight = FontWeight.Bold) },
+                            text = { Text(userName, fontWeight = FontWeight.Bold) },
                             onClick = {},
                             enabled = false
                         )
-                        Divider()
+                        HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Settings") },
                             onClick = { menuExpanded = false }
@@ -575,7 +533,7 @@ fun TopLayout(
 
 @Composable
 fun HomeScreen(navController: NavController) {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Matches", "Champion rotations")
     val isLogged = UserSession.userName != null
@@ -622,7 +580,7 @@ fun HomeScreen(navController: NavController) {
 
 @Composable
 fun PlayerScreen(navController: NavController, playerName: String) {
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
     val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Matches", "Champion rotations")
     Scaffold(
@@ -713,27 +671,6 @@ fun restoreGoogleSession(context: Context) {
         UserSession.userPhotoUrl = it.photoUrl?.toString()
     }
 }
-
-// funzione di testing
-fun testHTTP() {
-    val client = OkHttpClient()
-    val url = "https://reqres.in/api/users?page=2"
-    val request = Request.Builder().url(url).build()
-    Log.d("CHIAMA_FUNZIONE", "chiamando la funzione")
-    client.newCall(request).enqueue(object: Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            e.printStackTrace()
-        }
-        override fun onResponse(call: Call, response: Response) {
-            Log.d("VEDIAMO", response.code.toString())
-            if (response.isSuccessful) {
-                Log.d("RESPONSE_BODY", response.body!!.toString())
-            }
-            Log.d("SUCCESSO", "response completed")
-        }
-    })
-}
-
 
 @Composable
 fun Dashboard(isLogged: Boolean) {
