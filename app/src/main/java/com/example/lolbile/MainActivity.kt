@@ -73,6 +73,8 @@ import com.google.android.gms.auth.api.signin.GoogleSignInAccount
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.ApiException
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.firebase.crashlytics.buildtools.reloc.com.google.common.net.MediaType
+import com.google.firebase.crashlytics.buildtools.reloc.org.apache.http.client.methods.RequestBuilder
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.Call
@@ -86,6 +88,7 @@ import java.io.IOException
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.RequestBody
 import org.json.JSONObject
 
 class MainActivity : ComponentActivity() {
@@ -377,19 +380,42 @@ fun ButtonUI(navController: NavController) {
     }
 }
 
-fun verifyToken() {
+fun loginWithToken(googleToken: String) {
+    val json = "{\"token\":\"${googleToken}\"}"
+    val mediaType = "application/json; charset=utf-8".toMediaType()
+    val requestBody = json.toRequestBody(mediaType)
+    val url = "http://10.0.2.2:8080/api/login"
     val client = OkHttpClient()
-    val JSON = "application/json; charset=utf-8".toMediaType()
-    @Throws(IOException::class)
-    fun post(url: String, json: String): String? {
-        val body = json.toRequestBody(JSON)
-        val request = Request.Builder()
-            .url(url)
-            .post(body)
-            .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IOException("Unexpected code $response")
-            return response.body?.string()
+    val request = Request.Builder()
+        .url(url)
+        .post(requestBody)
+        .build()
+    client.newCall(request).execute().use { response ->
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+        try {
+            val jsonData = response.body!!.string()
+            val jsonObj = JSONObject(jsonData)
+            val message = jsonObj.getString("message")
+            when (message) {
+                "create_account" -> {
+                    // registrazione
+                    Log.i("REGISTER", "No account, redirecting to registration page")
+                }
+
+                "fuse_account" -> {
+                    // richiedi login
+                    Log.i("FUSE", "Linking account")
+                }
+
+                "login_ok" -> {
+                    // tutto ok (jwt token)
+                    UserSession.appAuthToken = jsonObj.getString("token")
+                    Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
+                }
+            }
+        }
+        catch (e: Exception)  {
+            Log.e("SERVER_ERROR", "Server error")
         }
     }
 }
