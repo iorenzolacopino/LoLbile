@@ -25,6 +25,7 @@ import com.example.lolbile.ui.theme.LoLbileTheme
 import android.content.ContentValues.TAG
 import android.content.Context
 import android.credentials.GetCredentialException
+import android.net.Uri
 import android.os.Build
 import android.util.Log
 import android.widget.Toast
@@ -36,6 +37,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Home
@@ -60,8 +62,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.navigation.NavType
+import androidx.navigation.navArgument
 import coil.compose.AsyncImage
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount
@@ -419,134 +424,154 @@ fun Navigation() {
         composable("home") { HomeScreen(navController) }
         composable("login") { LoginScreen(navController) }
         composable("register") { RegisterScreen(navController) }
+        composable(
+            route = "player/{playerName}",
+            arguments = listOf(navArgument("playerName") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
+            PlayerScreen(navController, playerName)
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController) {
-    var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Dashboard", "Leaderboard (top 200)", "Matches", "Champion rotations")
+fun TopLayout(
+    navController: NavController,
+    searchText: String,
+    onSearchTextChange: (String) -> Unit,
+    onSearch: (String) -> Unit
+) {
     var menuExpanded by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val account = GoogleSignIn.getLastSignedInAccount(context)
     val userName = UserSession.userName
     val userPhoto = UserSession.userPhotoUrl
     val isLogged = userName != null
-    var searchText by remember { mutableStateOf("") }
-    Scaffold(
-        topBar = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .padding(horizontal = 12.dp, vertical = 8.dp)
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val isHome = currentRoute == "home"
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(
+                onClick = {
+                    if (!isHome) navController.navigate("home")
+                },
+                enabled = !isHome
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { selectedTab = 0 }) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Home"
-                        )
-                    }
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = "LoLbile",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
-                    }
-                    Box {
-                        IconButton(onClick = { menuExpanded = true }) {
-                            if (userPhoto != null) {
-                                AsyncImage(
-                                    model = userPhoto,
-                                    contentDescription = "Profile picture",
-                                    modifier = Modifier
-                                        .size(36.dp)
-                                        .clip(CircleShape)
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.AccountCircle,
-                                    contentDescription = "Avatar"
-                                )
-                            }
-                        }
-                        DropdownMenu(
-                            expanded = menuExpanded,
-                            onDismissRequest = { menuExpanded = false }
-                        ) {
-                            if (isLogged) {
-                                DropdownMenuItem(
-                                    text = { Text(userName!!, fontWeight = FontWeight.Bold) },
-                                    onClick = {},
-                                    enabled = false
-                                )
-                                Divider()
-                                DropdownMenuItem(
-                                    text = { Text("Settings") },
-                                    onClick = { menuExpanded = false }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Logout") },
-                                    onClick = {
-                                        UserSession.clear()
-                                        menuExpanded = false
-                                    }
-                                )
-                            } else {
-                                DropdownMenuItem(
-                                    text = { Text("Login") },
-                                    onClick = {
-                                        menuExpanded = false
-                                        navController.navigate("login")
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = searchText,
-                    onValueChange = { searchText = it },
-                    placeholder = { Text("Search players...") },
-                    singleLine = true,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    shape = RoundedCornerShape(20),
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (searchText.isNotEmpty()) {
-                            Button(
-                                onClick = { /* search */ },
-                                modifier = Modifier
-                                    .padding(end = 8.dp)
-                                    .height(36.dp),
-                                shape = RoundedCornerShape(12.dp),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                            ) {
-                                Text(
-                                    text = "Go",
-                                    style = MaterialTheme.typography.labelLarge
-                                )
-                            }
-                        }
-                    }
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = "Home",
+                    tint = if (isHome)
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    else
+                        MaterialTheme.colorScheme.onSurface
                 )
             }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                Text("LoLbile", fontWeight = FontWeight.Bold, fontSize = 20.sp)
+            }
+            Box {
+                IconButton(onClick = { menuExpanded = true }) {
+                    if (userPhoto != null) {
+                        AsyncImage(
+                            model = userPhoto,
+                            contentDescription = "Profile",
+                            modifier = Modifier.size(36.dp).clip(CircleShape)
+                        )
+                    } else {
+                        Icon(Icons.Default.AccountCircle, contentDescription = null)
+                    }
+                }
+                DropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false }
+                ) {
+                    if (isLogged) {
+                        DropdownMenuItem(
+                            text = { Text(userName!!, fontWeight = FontWeight.Bold) },
+                            onClick = {},
+                            enabled = false
+                        )
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text("Settings") },
+                            onClick = { menuExpanded = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Logout") },
+                            onClick = {
+                                UserSession.clear()
+                                menuExpanded = false
+                            }
+                        )
+                    } else {
+                        DropdownMenuItem(
+                            text = { Text("Login") },
+                            onClick = {
+                                menuExpanded = false
+                                navController.navigate("login")
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = searchText,
+            onValueChange = onSearchTextChange,
+            placeholder = { Text("Search players...") },
+            singleLine = true,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(56.dp),
+            shape = RoundedCornerShape(20),
+            leadingIcon = { Icon(Icons.Default.Search, null) },
+            trailingIcon = {
+                if (searchText.isNotEmpty()) {
+                    Button(
+                        onClick = { onSearch(searchText) },
+                        modifier = Modifier.padding(end = 8.dp).height(36.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(horizontal = 12.dp)
+                    ) { Text("Go") }
+                }
+            },
+            keyboardActions = KeyboardActions(
+                onSearch = {
+                    val encoded = Uri.encode(searchText.trim())
+                    navController.navigate("player/$encoded")
+                }
+            ),
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+        )
+    }
+}
+
+@Composable
+fun HomeScreen(navController: NavController) {
+    var selectedTab by remember { mutableStateOf(0) }
+    var searchText by remember { mutableStateOf("") }
+    val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Matches", "Champion rotations")
+    val isLogged = UserSession.userName != null
+    Scaffold(
+        topBar = {
+            TopLayout(
+                navController = navController,
+                searchText = searchText,
+                onSearchTextChange = { searchText = it },
+                onSearch = {
+                    val encoded = Uri.encode(it.trim())
+                    navController.navigate("player/$encoded")
+                }
+            )
         }
     ) { paddingValues ->
         Column(
@@ -576,6 +601,92 @@ fun HomeScreen(navController: NavController) {
         }
     }
 }
+
+@Composable
+fun PlayerScreen(navController: NavController, playerName: String) {
+    var selectedTab by remember { mutableStateOf(0) }
+    var searchText by remember { mutableStateOf("") }
+    val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Matches", "Champion rotations")
+    Scaffold(
+        topBar = {
+            TopLayout(
+                navController = navController,
+                searchText = searchText,
+                onSearchTextChange = { searchText = it },
+                onSearch = {
+                    val encoded = Uri.encode(it.trim())
+                    navController.navigate("player/$encoded")
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .fillMaxSize()
+        ) {
+            ScrollableTabRow(
+                selectedTabIndex = selectedTab,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(title) }
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "$playerName — ${tabs[selectedTab]}",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun PlayerTopBar(navController: NavController) {
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+    val isHome = currentRoute == "home"
+    TopAppBar(
+        title = {
+            Text(
+                "LoLbile",
+                fontWeight = FontWeight.Bold
+            )
+        },
+        navigationIcon = {
+            IconButton(
+                onClick = {
+                    if (!isHome) {
+                        navController.navigate("home") {
+                            popUpTo("home") { inclusive = false }
+                        }
+                    }
+                },
+                enabled = !isHome
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Home,
+                    contentDescription = "Home",
+                    tint = if (isHome)
+                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
+                    else
+                        MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    )
+}
+
 
 fun restoreGoogleSession(context: Context) {
     val account = GoogleSignIn.getLastSignedInAccount(context)

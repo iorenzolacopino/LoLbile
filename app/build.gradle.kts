@@ -53,6 +53,7 @@ dependencies {
     implementation(libs.play.services.auth)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.compose.ui.text)
+    implementation(libs.androidx.compose.foundation)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
