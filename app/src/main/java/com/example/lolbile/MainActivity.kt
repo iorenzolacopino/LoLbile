@@ -291,15 +291,8 @@ suspend fun signIn(request: GetCredentialRequest, context: Context): Boolean {
             UserSession.userName = googleIdTokenCredential.displayName
             UserSession.userPhotoUrl = googleIdTokenCredential.profilePictureUri?.toString()
             val idToken = googleIdTokenCredential.idToken
-            val backendToken = sendGoogleTokenToBackend(idToken)
-            if (backendToken != null) {
-                UserSession.appAuthToken = backendToken
-                Log.d("LOGIN_DEBUG", "Backend token saved")
-                true
-            } else {
-                Log.e("LOGIN_DEBUG", "Backend auth failed")
-                false
-            }
+            loginWithToken(idToken)
+            true
         } else {
             Log.e("LOGIN_DEBUG", "Credential type not supported: ${credential.type}")
             false
@@ -368,7 +361,6 @@ fun ButtonUI(navController: NavController) {
                 }
             }
         }
-        testHTTP()
     }
     Button(
         onClick = onClick,
