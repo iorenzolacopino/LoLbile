@@ -5,11 +5,6 @@ plugins {
 }
 
 android {
-    signingConfigs {
-        getByName("debug") {
-            storeFile = file("C:\\Users\\filip\\Desktop\\debug.keystore")
-        }
-    }
     namespace = "com.example.lolbile"
     compileSdk = 35
 
@@ -43,6 +38,7 @@ android {
         compose = true
     }
 }
+
 
 dependencies {
     implementation(libs.androidx.core.ktx)

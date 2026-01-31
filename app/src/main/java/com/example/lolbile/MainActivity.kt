@@ -69,6 +69,7 @@ import java.io.IOException
 import java.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.internal.userAgent
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
 
@@ -155,15 +156,7 @@ fun LoginScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
-            onClick = {
-                // backend
-                // loginUser(email, password)
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Login")
-        }
+        LoginButton(email, password, navController)
 
         Spacer(modifier = Modifier.height(24.dp))
 
@@ -191,8 +184,10 @@ fun LoginScreen(navController: NavController) {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun RegisterScreen(navController: NavController) {
+    var username by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
@@ -205,6 +200,15 @@ fun RegisterScreen(navController: NavController) {
         Text("Create account", fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
         Spacer(Modifier.height(32.dp))
+
+        OutlinedTextField(
+            value = username,
+            onValueChange = { username = it },
+            label = { Text("Username") },
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
             value = email,
@@ -236,15 +240,7 @@ fun RegisterScreen(navController: NavController) {
 
         Spacer(Modifier.height(24.dp))
 
-        Button(
-            onClick = {
-                // backend
-                // registerUser(email, password)
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Register")
-        }
+        RegisterButton(username, email, password, navController)
 
         Spacer(Modifier.height(12.dp))
 
@@ -276,6 +272,8 @@ suspend fun signIn(request: GetCredentialRequest, context: Context){
         Log.e("LOGIN_DEBUG", "Generic error", e)
     }
 }
+
+// BUTTONS DEFINITIONS
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun ButtonUI(navController: NavController) {
@@ -321,8 +319,9 @@ suspend fun loginWithToken(googleToken: String){
         .post(requestBody)
         .build()
     val response = client.newCall(request).await()
-    if (!response.isSuccessful) throw IOException("Unexpected code $response")
     try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+
         val jsonData = response.body!!.string()
         val jsonObj = JSONObject(jsonData)
         val message = jsonObj.getString("message")
@@ -335,16 +334,189 @@ suspend fun loginWithToken(googleToken: String){
         }
     } catch (e: Exception) {
         Log.e("SERVER_ERROR", "Server error", e)
+    } finally {
+        response.close();
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@Composable
+fun RegisterButton(username: String, email: String, password: String, navController: NavController){
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val username = username;
+    val email = email;
+    val password = password
+
+    val onClick: () -> Unit = {
+
+        coroutineScope.launch {
+            var success = registerUser(username,email,password)
+            if(success)
+            {
+                success = loginPass(email,password);
+                if(success)
+                {
+                    navController.navigate("home") {
+                        popUpTo("login") {
+                            inclusive = true
+                }
+            }
+
+                }
+            }
+        }
+    }
+
+
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Spacer(Modifier.width(8.dp))
+        Text("Register", color = Color.White)
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@Composable
+fun LoginButton(email: String, password: String, navController: NavController){
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val email = email;
+    val password = password
+
+    val onClick: () -> Unit = {
+
+        coroutineScope.launch {
+            val success = loginPass(email,password);
+            if(success) {
+                navController.navigate("home") {
+                    popUpTo("login") {
+                        inclusive = true
+                    }
+                }
+
+            }
+        }
+    }
+
+
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Spacer(Modifier.width(8.dp))
+        Text("Login", color = Color.White)
+    }
+}
+
+suspend fun registerUser(username: String, email: String, password: String): Boolean{
+    val json = "{\"email\":\"${email}\",\"username\":\"${username}\",\"password\":\"${password}\"}"
+    val mediaType = "application/json; charset=utf-8".toMediaType()
+    val requestBody = json.toRequestBody(mediaType)
+    var success = false;
+    val url = "http://10.0.2.2:8080/api/register"
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(url)
+        .post(requestBody)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful){
+            if(response.code == 400)
+            {
+                val jsonData = response.body!!.string()
+                val jsonObj = JSONObject(jsonData)
+                val message = jsonObj.getString("message")
+                when(message){
+                    "All fields are required" -> {
+                        Log.e("SERVER_ERROR", message)
+                    }
+                    "User already exists" ->
+                    {
+                        Log.e("SERVER_ERROR", message)
+                    }
+                }
+            }
+            else
+            {
+                throw IOException("Unexpected code $response")
+            }
+        }
+        else {
+            val jsonData = response.body!!.string()
+            val jsonObj = JSONObject(jsonData)
+            val message = jsonObj.getString("message")
+            when (message) {
+                "Successfuly created account" -> {
+                    // tutto ok (jwt token)
+                    success = true;
+                }
+            }
+        }
+
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
     }
     finally {
         response.close();
     }
+    return success;
 }
-/*
-fun registerUser()
 
-fun findUser()
- */
+suspend fun loginPass(email: String,password: String): Boolean{
+    val json = "{\"email\":\"${email}\",\"password\":\"${password}\"}"
+    val mediaType = "application/json; charset=utf-8".toMediaType()
+    val requestBody = json.toRequestBody(mediaType)
+    var success = false;
+    val url = "http://10.0.2.2:8080/api/login"
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(url)
+        .post(requestBody)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful){
+            if(response.code == 400)
+            {
+                val jsonData = response.body!!.string()
+                val jsonObj = JSONObject(jsonData)
+                val message = jsonObj.getString("message")
+                if(message == "Invalid Credentials")
+                {
+                    Log.e("SERVER_ERROR", message)
+                }
+            }
+            else
+            {
+                throw IOException("Unexpected code $response")
+            }
+        }
+        else{
+            val jsonData = response.body!!.string()
+            val jsonObj = JSONObject(jsonData)
+            val message = jsonObj.getString("message")
+            when (message) {
+                "login_ok" -> {
+                    // tutto ok (jwt token)
+                    UserSession.userName = jsonObj.getString("username")
+                    UserSession.appAuthToken = jsonObj.getString("token")
+                    Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
+                    success = true;
+                }
+            }
+        }
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
+    }
+    finally {
+        response.close();
+    }
+    return success;
+}
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
