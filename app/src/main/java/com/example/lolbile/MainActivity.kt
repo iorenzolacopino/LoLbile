@@ -254,14 +254,8 @@ fun RegisterScreen(navController: NavController) {
     }
 }
 
-fun generateSecureRandomNonce(byteLength: Int = 32): String {
-    val randomBytes = ByteArray(byteLength)
-    SecureRandom.getInstanceStrong().nextBytes(randomBytes)
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes)
-}
-
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
-suspend fun signIn(request: GetCredentialRequest, context: Context): String {
+suspend fun signIn(request: GetCredentialRequest, context: Context){
     val credentialManager = CredentialManager.create(context)
     delay(2000)
     try {
@@ -272,18 +266,14 @@ suspend fun signIn(request: GetCredentialRequest, context: Context): String {
             UserSession.userName = googleIdTokenCredential.displayName
             UserSession.userPhotoUrl = googleIdTokenCredential.profilePictureUri?.toString()
             val idToken = googleIdTokenCredential.idToken
-            val redirect = loginWithToken(idToken)
-            return redirect
+            loginWithToken(idToken)
         } else {
             Log.e("LOGIN_DEBUG", "Credential type not supported: ${credential.type}")
-            return "err"
         }
     } catch (e: GetCredentialException) {
         Log.e("LOGIN_DEBUG", "Credential Manager Error: ${e.message}")
-        return "err"
     } catch (e: Exception) {
         Log.e("LOGIN_DEBUG", "Generic error", e)
-        return "err"
     }
 }
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
@@ -302,26 +292,10 @@ fun ButtonUI(navController: NavController) {
             .addCredentialOption(signInWithGoogleOption)
             .build()
         coroutineScope.launch {
-            val message = signIn(request, context)
-            when (message) {
-                "create_account" -> {
-                    // registrazione
-                    Log.i("REGISTER", "No account, redirecting to registration page")
-
-                }
-
-                "fuse_account" -> {
-                    // Richiedi login
-                    Log.i("FUSE", "Linking account")
-
-                }
-
-                "login_ok" -> {
-                    navController.navigate("home") {
-                        popUpTo("login") {
-                            inclusive = true
-                        }
-                    }
+            signIn(request, context)
+            navController.navigate("home") {
+                popUpTo("login") {
+                    inclusive = true
                 }
             }
         }
@@ -336,7 +310,7 @@ fun ButtonUI(navController: NavController) {
     }
 }
 
-suspend fun loginWithToken(googleToken: String): String{
+suspend fun loginWithToken(googleToken: String){
     val json = "{\"token\":\"${googleToken}\"}"
     val mediaType = "application/json; charset=utf-8".toMediaType()
     val requestBody = json.toRequestBody(mediaType)
@@ -347,37 +321,24 @@ suspend fun loginWithToken(googleToken: String): String{
         .post(requestBody)
         .build()
     val response = client.newCall(request).await()
-    var result = "err"
     if (!response.isSuccessful) throw IOException("Unexpected code $response")
     try {
         val jsonData = response.body!!.string()
         val jsonObj = JSONObject(jsonData)
         val message = jsonObj.getString("message")
         when (message) {
-            "create_account" -> {
-                // registrazione
-                Log.i("REGISTER", "No account, redirecting to registration page")
-                result = "create_account"
-            }
-
-            "fuse_account" -> {
-                // Richiedi login
-                Log.i("FUSE", "Linking account")
-                result = "fuse_account"
-            }
-
             "login_ok" -> {
                 // tutto ok (jwt token)
                 UserSession.appAuthToken = jsonObj.getString("token")
                 Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
-                result = "login_ok"
             }
         }
     } catch (e: Exception) {
         Log.e("SERVER_ERROR", "Server error", e)
-        result = "err"
     }
-    return result
+    finally {
+        response.close();
+    }
 }
 /*
 fun registerUser()
