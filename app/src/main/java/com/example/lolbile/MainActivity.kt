@@ -31,9 +31,12 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
@@ -72,6 +75,9 @@ import kotlinx.coroutines.withContext
 import okhttp3.internal.userAgent
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 
 class MainActivity : ComponentActivity() {
 
@@ -101,6 +107,12 @@ object UserSession {
         appAuthToken = null
     }
 }
+
+data class Player (
+    val nome: String,
+    val puuid: String,
+    val lp: Int
+)
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
@@ -590,7 +602,7 @@ fun TopLayout(
                         AsyncImage(
                             model = userPhoto,
                             contentDescription = "Profile",
-                            modifier = Modifier.size(36.dp).clip(CircleShape)
+                            modifier = Modifier.size(24.dp).clip(CircleShape)
                         )
                     } else {
                         Icon(Icons.Default.AccountCircle, contentDescription = null)
@@ -624,6 +636,13 @@ fun TopLayout(
                             onClick = {
                                 menuExpanded = false
                                 navController.navigate("login")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Register") },
+                            onClick = {
+                                menuExpanded = false
+                                navController.navigate("register")
                             }
                         )
                     }
@@ -715,7 +734,7 @@ fun HomeScreen(navController: NavController) {
 fun PlayerScreen(navController: NavController, playerName: String) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
-    val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Matches", "Champion rotations")
+    val tabs = listOf("Dashboard", "Matches", "Champion rotations")
     Scaffold(
         topBar = {
             TopLayout(
@@ -839,13 +858,133 @@ fun Dashboard(isLogged: Boolean) {
     }
 }
 
+@OptIn(ExperimentalMaterialApi::class)
 @Composable
 fun Leaderboard() {
+    var players by remember { mutableStateOf<List<Player>>(emptyList()) }
+    var loading by remember { mutableStateOf(true) }
+    var refreshing by remember { mutableStateOf(false) }
+
+    suspend fun loadData() {
+        players = fetchLeaderboard()
+    }
+
+    LaunchedEffect(Unit) {
+        loadData()
+        loading = false
+    }
+
+    val refreshScope = rememberCoroutineScope()
+
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = refreshing,
+        onRefresh = {
+            refreshScope.launch {
+                refreshing = true
+                loadData()
+                refreshing = false
+            }
+        }
+    )
+
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        Modifier
+            .fillMaxSize()
+            .pullRefresh(pullRefreshState)
     ) {
-        Text("Leaderboard", fontSize = 22.sp)
+
+        if (loading) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator()
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                itemsIndexed(players) { index, player ->
+                    PlayerCard(player, index + 1)
+                }
+            }
+        }
+
+        PullRefreshIndicator(
+            refreshing,
+            pullRefreshState,
+            Modifier.align(Alignment.TopCenter)
+        )
+    }
+}
+
+suspend fun fetchLeaderboard(): List<Player> = withContext(Dispatchers.IO) {
+    try {
+        val client = OkHttpClient()
+
+        val request = Request.Builder()
+            .url("http://10.0.2.2:8080/api/summoner/leaderboard")
+            .get()
+            .build()
+
+        val response = client.newCall(request).execute()
+
+        if (!response.isSuccessful) return@withContext emptyList()
+
+        val jsonString = response.body!!.string()
+        val rootObj = JSONObject(jsonString)
+        val playersArray = rootObj.getJSONArray("players")
+
+        val players = mutableListOf<Player>()
+
+        for (i in 0 until playersArray.length()) {
+            val obj = playersArray.getJSONObject(i)
+            players.add(
+                Player(
+                    nome = obj.getString("nome"),
+                    puuid = obj.getString("puuid"),
+                    lp = obj.getInt("lp")
+                )
+            )
+        }
+
+        players
+
+    } catch (e: Exception) {
+        Log.e("API_ERROR", "Leaderboard error", e)
+        emptyList()
+    }
+}
+
+@Composable
+fun PlayerCard(player: Player, position: Int) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Text(
+                "#$position",
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                modifier = Modifier.width(40.dp)
+            )
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(player.nome, fontWeight = FontWeight.Bold)
+            }
+
+            Text(
+                "${player.lp} LP",
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
     }
 }
 
