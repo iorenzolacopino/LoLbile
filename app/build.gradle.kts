@@ -55,6 +55,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.compose.ui.text)
     implementation(libs.androidx.compose.foundation)
+    implementation(libs.androidx.graphics.shapes)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -75,4 +76,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.8.5")
     implementation("ru.gildor.coroutines:kotlin-coroutines-okhttp:1.0")
     implementation("androidx.compose.material:material:1.6.0")
+    implementation(platform("androidx.compose:compose-bom:2026.01.00"))
+    implementation("androidx.graphics:graphics-shapes:1.0.1")
+
 }
