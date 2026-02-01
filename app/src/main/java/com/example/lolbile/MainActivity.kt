@@ -1,90 +1,99 @@
 package com.example.lolbile
 
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
-import androidx.navigation.compose.*
-import com.example.lolbile.ui.theme.LoLbileTheme
 import android.content.Context
 import android.credentials.GetCredentialException
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.ExperimentalMaterialApi
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Matrix
+import androidx.compose.ui.graphics.Outline
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.asComposePath
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.graphics.shapes.CornerRounding
+import androidx.graphics.shapes.RoundedPolygon
+import androidx.graphics.shapes.toPath
+import androidx.navigation.NavController
+import androidx.navigation.compose.*
+import coil.compose.AsyncImage
+import com.example.lolbile.ui.theme.LoLbileTheme
+import android.graphics.Bitmap
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Column
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import java.security.SecureRandom
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.navigation.NavType
-import androidx.navigation.navArgument
-import coil.compose.AsyncImage
-import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import okhttp3.Call
-import okhttp3.Callback
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import okhttp3.Response
-import java.io.IOException
-import java.util.Base64
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.internal.userAgent
+import org.json.JSONArray
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
-import androidx.compose.material.pullrefresh.PullRefreshIndicator
-import androidx.compose.material.pullrefresh.pullRefresh
-import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import java.io.IOException
+import kotlin.math.max
+import androidx.compose.foundation.lazy.items
 import androidx.core.content.FileProvider
+import com.google.android.gms.auth.api.signin.GoogleSignIn
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.MultipartBody
 import java.io.File
@@ -118,6 +127,32 @@ object UserSession {
         appAuthToken = null
     }
 }
+
+object SearchedPlayer {
+    var userName by mutableStateOf<String?>(null)
+    var soloQ by mutableStateOf<String?>(null)
+    var flexQ by mutableStateOf<String?>(null)
+    var profileIcon by mutableStateOf<String?>(null)
+    var summonerLevel by mutableStateOf<Int?>(0)
+    var gamesFetched by mutableStateOf<Boolean?>(false)
+    var games by mutableStateOf<JSONArray?>(null)
+    fun clear(){
+        userName = null
+        soloQ = null
+        flexQ = null
+        profileIcon = null
+        summonerLevel = null
+        games = null
+        gamesFetched = false
+
+    }
+}
+
+data class Match (
+    val team1: List<JSONObject>,
+    val team2: List<JSONObject>,
+    val winner: Boolean,
+)
 
 data class Player (
     val nome: String,
@@ -525,6 +560,11 @@ suspend fun loginPass(email: String,password: String): Boolean{
             when (message) {
                 "login_ok" -> {
                     // tutto ok (jwt token)
+                    val profileImageUrl = jsonObj.getString("image")
+                    if(profileImageUrl != null)
+                    {
+                        UserSession.userPhotoUrl = "http://34.120.96.92/$profileImageUrl"
+                    }
                     UserSession.userName = jsonObj.getString("username")
                     UserSession.appAuthToken = jsonObj.getString("token")
                     Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
@@ -543,6 +583,119 @@ suspend fun loginPass(email: String,password: String): Boolean{
 
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
+fun SearchButton(player: String){
+    val coroutineScope = rememberCoroutineScope()
+    val infoList = player.split("#")
+    var riotID = ""
+    var tag = ""
+    if(infoList.size < 2){
+        riotID = infoList[0]
+        tag = "EUW"
+    }
+    else{
+        riotID = infoList[0]
+        tag = infoList[1]
+    }
+    val onClick: () -> Unit = {
+
+        coroutineScope.launch {
+            searchPlayer(riotID, tag);
+        }
+    }
+
+
+    Button(
+        onClick = onClick,
+    ) {
+        Spacer(Modifier.width(8.dp))
+        Text("Search", color = Color.White)
+    }
+}
+
+suspend fun searchPlayer(riotID: String, tag: String): Boolean{
+    val url = "http://10.0.2.2:8080/api/summoner/$riotID/$tag"
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(url)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+
+        SearchedPlayer.clear()
+        val jsonData = response.body!!.string()
+        val jsonObj = JSONObject(jsonData)
+        val summoner = jsonObj.getJSONObject("summoner")
+        SearchedPlayer.userName = summoner.getString("nome")
+        SearchedPlayer.profileIcon = summoner.getString("profile_icon_id")
+        SearchedPlayer.summonerLevel = summoner.getInt("summoner_level")
+        SearchedPlayer.soloQ = summoner.getString("soloq_rank")
+        SearchedPlayer.flexQ = summoner.getString("flex_rank")
+
+        SearchedPlayer.games = summoner.getJSONArray("games")
+        return true
+
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
+        return false
+    } finally {
+        response.close();
+    }
+}
+
+suspend fun fillGames(): List<Match> = withContext(Dispatchers.IO){
+    val url = "http://10.0.2.2:8080/api/game/info"
+    val mediaType = "application/json; charset=utf-8".toMediaType()
+    val json = "{\"games\": ${SearchedPlayer.games.toString()}}";
+    Log.d("JSON VALUE",json)
+    val requestBody = json.toRequestBody(mediaType)
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(url)
+        .post(requestBody)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+
+        val jsonData = response.body!!.string()
+        val matches = mutableListOf<Match>()
+        val jsonArr = JSONArray(jsonData)
+        val arrayLength = jsonArr.length()
+        for( i in 0..<arrayLength-1)
+        {
+            val game = jsonArr.getJSONObject(i);
+            val team1 = mutableListOf<JSONObject>()
+            val team2 = mutableListOf<JSONObject>()
+            val team1json = game.getJSONArray("team_1")
+            val team2json = game.getJSONArray("team_2")
+            for(i in 0..4)
+            {
+                team1.add(JSONObject(team1json[i].toString()));
+                team2.add(JSONObject(team2json[i].toString()));
+            }
+            matches.add(
+                Match(
+                    team1 = team1,
+                    team2 = team2,
+                    winner = game.getBoolean("winner")
+                )
+            )
+        }
+        SearchedPlayer.gamesFetched = true
+        matches
+
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
+        SearchedPlayer.gamesFetched = false
+        emptyList()
+    } finally {
+        response.close();
+    }
+}
+
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+@Composable
 fun Navigation() {
     val navController = rememberNavController()
     val context = LocalContext.current
@@ -557,16 +710,10 @@ fun Navigation() {
         composable("login") { LoginScreen(navController) }
         composable("register") { RegisterScreen(navController) }
         composable("settings") { SettingsScreen(navController) }
-        composable(
-            route = "player/{playerName}",
-            arguments = listOf(navArgument("playerName") { type = NavType.StringType })
-        ) { backStackEntry ->
-            val playerName = backStackEntry.arguments?.getString("playerName") ?: ""
-            PlayerScreen(navController, playerName)
-        }
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun TopLayout(
     navController: NavController,
@@ -614,7 +761,9 @@ fun TopLayout(
                         AsyncImage(
                             model = userPhoto,
                             contentDescription = "Profile",
-                            modifier = Modifier.size(24.dp).clip(CircleShape)
+                            modifier = Modifier
+                                .size(24.dp)
+                                .clip(CircleShape)
                         )
                     } else {
                         Icon(Icons.Default.AccountCircle, contentDescription = null)
@@ -679,31 +828,20 @@ fun TopLayout(
             leadingIcon = { Icon(Icons.Default.Search, null) },
             trailingIcon = {
                 if (searchText.isNotEmpty()) {
-                    Button(
-                        onClick = { onSearch(searchText) },
-                        modifier = Modifier.padding(end = 8.dp).height(36.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 12.dp)
-                    ) { Text("Go") }
+                    SearchButton(searchText)
                 }
-            },
-            keyboardActions = KeyboardActions(
-                onSearch = {
-                    val encoded = Uri.encode(searchText.trim())
-                    navController.navigate("player/$encoded")
-                }
-            ),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search)
+            }
         )
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun HomeScreen(navController: NavController) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
-    val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Matches", "Champion rotations")
-    val isLogged = UserSession.userName != null
+    val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Champion rotations")
+    val isFound = SearchedPlayer.userName != null
     Scaffold(
         topBar = {
             TopLayout(
@@ -736,59 +874,9 @@ fun HomeScreen(navController: NavController) {
                 }
             }
             when (selectedTab) {
-                0 -> Dashboard(isLogged)
+                0 -> Dashboard(isFound)
                 1 -> Leaderboard()
-                2 -> Matches(isLogged)
-                3 -> ChampionRotations(isLogged)
-            }
-        }
-    }
-}
-
-@Composable
-fun PlayerScreen(navController: NavController, playerName: String) {
-    var selectedTab by remember { mutableIntStateOf(0) }
-    var searchText by remember { mutableStateOf("") }
-    val tabs = listOf("Dashboard", "Matches", "Champion rotations")
-    Scaffold(
-        topBar = {
-            TopLayout(
-                navController = navController,
-                searchText = searchText,
-                onSearchTextChange = { searchText = it },
-                onSearch = {
-                    val encoded = Uri.encode(it.trim())
-                    navController.navigate("player/$encoded")
-                }
-            )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .fillMaxSize()
-        ) {
-            ScrollableTabRow(
-                selectedTabIndex = selectedTab,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(
-                        selected = selectedTab == index,
-                        onClick = { selectedTab = index },
-                        text = { Text(title) }
-                    )
-                }
-            }
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "$playerName — ${tabs[selectedTab]}",
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                2 -> ChampionRotations(isFound)
             }
         }
     }
@@ -1014,16 +1102,124 @@ fun restoreGoogleSession(context: Context) {
 }
 
 @Composable
-fun Dashboard(isLogged: Boolean) {
+fun Dashboard(isFound: Boolean) {
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize()
     ) {
-        if (isLogged) {
-            Text("Dashboard", fontSize = 22.sp)
+        if (isFound) {
+            var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
+            var loading by remember { mutableStateOf(true) }
+            var refreshing by remember { mutableStateOf(false) }
+
+            suspend fun loadData() {
+                matches = fillGames()
+            }
+
+            LaunchedEffect(Unit) {
+                if(SearchedPlayer.gamesFetched == false) {
+                    loadData()
+                    loading = false
+                }
+            }
+
+            if (loading) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
+            else {
+
+                val hexagon = remember {
+                    RoundedPolygon(
+                        6,
+                        rounding = CornerRounding(0.2f)
+                    )
+                }
+
+                val clip = remember(hexagon) {
+                    RoundedPolygonShape(polygon = hexagon)
+                }
+
+                Column(){
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+
+                        Column() {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(top = 6.dp, start = 6.dp),
+                            ) {
+                                Text(
+                                    text = SearchedPlayer.summonerLevel.toString(),
+                                    modifier = Modifier.padding(top = 180.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 30.sp,
+
+                                    )
+                            }
+                        }
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+
+                            ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 5.dp)
+                            ) {
+                                Text(
+                                    modifier = Modifier.padding(start = 5.dp),
+                                    text = SearchedPlayer.userName.toString(),
+                                    fontFamily = FontFamily.SansSerif,
+                                    fontSize = 20.sp,
+                                )
+                            }
+                            Row()
+                            {
+                                Column() {
+                                    Text(
+                                        text = "Solo Q Rank:"
+                                    )
+                                    Text(
+                                        text = SearchedPlayer.soloQ.toString(),
+                                    )
+                                }
+                            }
+                            Row()
+                            {
+                                Column() {
+                                    Text(
+                                        text = "Flex Q Rank:"
+                                    )
+                                    Text(
+                                        text = SearchedPlayer.flexQ.toString(),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Row(modifier = Modifier.fillMaxWidth())
+                    {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(matches) { match ->
+                                MatchCard(match)
+                            }
+                        }
+                    }
+                }
+            }
         }
         else {
             Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(40.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Icon(
@@ -1036,7 +1232,7 @@ fun Dashboard(isLogged: Boolean) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "As an unauthenticated user you can only search players.",
+                    text = "Search for a Player",
                     fontSize = 18.sp,
                     textAlign = TextAlign.Center,
                     color = Color.Gray,
@@ -1178,13 +1374,83 @@ fun PlayerCard(player: Player, position: Int) {
 }
 
 @Composable
-fun Matches(isLogged: Boolean) {
+fun MatchCard(match: Match){
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(4.dp)
+    ) {
+        Row()
+        {
+            Column(modifier = Modifier.border(width = 1.dp, Color.Green).padding(end = 5.dp).fillMaxWidth(0.5f)) {
+                Row(
+                    modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()
+                    )
+                {
+
+                    Text(
+                        text = "${match.team1[0].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team1[1].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team1[2].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team1[3].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team1[4].getString("playerId")}"
+                    )
+                }
+            }
+            Column(modifier = Modifier.border(width = 1.dp, Color.Green).fillMaxWidth()) {
+                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team2[0].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team2[1].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team2[2].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team2[3].getString("playerId")}"
+                    )
+                }
+                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                    Text(
+                        text = "${match.team2[4].getString("playerId")}"
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChampionRotations(isLogged: Boolean){
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         if (isLogged) {
-            Text("Matches", fontSize = 22.sp)
+            Text("Champion rotations", fontSize = 22.sp)
         }
         else {
             Column(
@@ -1211,39 +1477,26 @@ fun Matches(isLogged: Boolean) {
     }
 }
 
-@Composable
-fun ChampionRotations(isLogged: Boolean){
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isLogged) {
-            Text("Champion rotations", fontSize = 22.sp)
-        }
-        else {
-            /*
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = Color.Gray
-                )
+fun RoundedPolygon.getBounds() = calculateBounds().let { Rect(it[0], it[1], it[2], it[3]) }
+class RoundedPolygonShape(
+    private val polygon: RoundedPolygon,
+    private var matrix: Matrix = Matrix()
+) : Shape {
+    private var path = Path()
+    override fun createOutline(
+        size: Size,
+        layoutDirection: LayoutDirection,
+        density: Density
+    ): Outline {
+        path.rewind()
+        path = polygon.toPath().asComposePath()
+        matrix.reset()
+        val bounds = polygon.getBounds()
+        val maxDimension = max(bounds.width, bounds.height)
+        matrix.scale(size.width / maxDimension, size.height / maxDimension)
+        matrix.translate(-bounds.left, -bounds.top)
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                Text(
-                    text = "As an unauthenticated user you can only search players.",
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                    color = Color.Gray,
-                    lineHeight = 24.sp
-                )
-            }
-            */
-
-        }
+        path.transform(matrix)
+        return Outline.Generic(path)
     }
 }
