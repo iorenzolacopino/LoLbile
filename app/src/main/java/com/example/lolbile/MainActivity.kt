@@ -1,5 +1,6 @@
 package com.example.lolbile
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.credentials.GetCredentialException
 import android.net.Uri
@@ -68,6 +69,7 @@ import androidx.navigation.compose.*
 import coil.compose.AsyncImage
 import com.example.lolbile.ui.theme.LoLbileTheme
 import android.graphics.Bitmap
+import android.location.Geocoder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -92,25 +94,40 @@ import ru.gildor.coroutines.okhttp.await
 import java.io.IOException
 import kotlin.math.max
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Language
 import androidx.core.content.FileProvider
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.location.LocationServices
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.MultipartBody
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
+import kotlinx.coroutines.flow.first
+
+val Context.dataStore by preferencesDataStore("settings")
+val LANGUAGE_KEY = stringPreferencesKey("language")
 
 class MainActivity : ComponentActivity() {
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            LoLbileTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ){
-                    Navigation()
+        lifecycleScope.launch {
+            val savedLang = applicationContext.dataStore.data.first()[LANGUAGE_KEY]
+            savedLang?.let { setAppLocale(this@MainActivity, it) }
+            setContent {
+                LoLbileTheme {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        color = MaterialTheme.colorScheme.background
+                    ){
+                        Navigation()
+                    }
                 }
             }
         }
@@ -727,6 +744,8 @@ fun TopLayout(
     val isLogged = userName != null
     val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
     val isHome = currentRoute == "home"
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -737,19 +756,52 @@ fun TopLayout(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = {
-                    if (!isHome) navController.navigate("home")
-                },
-                enabled = !isHome
+            var langMenu by remember { mutableStateOf(false) }
+            IconButton(onClick = { langMenu = true }) {
+                Icon(Icons.Default.Language, contentDescription = "Language")
+            }
+            DropdownMenu(
+                expanded = langMenu,
+                onDismissRequest = { langMenu = false }
             ) {
-                Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    tint = if (isHome)
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    else
-                        MaterialTheme.colorScheme.onSurface
+
+                DropdownMenuItem(
+                    text = { Text("Automatic (GPS)") },
+                    onClick = {
+                        langMenu = false
+                        detectCountry(context) { country ->
+                            val lang = countryToLanguage(country)
+                            setAppLocale(context, lang)
+                            scope.launch {
+                                context.dataStore.edit { it[LANGUAGE_KEY] = lang }
+                            }
+                            (context as android.app.Activity).recreate()
+                        }
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = { Text("Italiano") },
+                    onClick = {
+                        changeLanguage("it", context, scope)
+                        langMenu = false
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = { Text("English") },
+                    onClick = {
+                        changeLanguage("en", context, scope)
+                        langMenu = false
+                    }
+                )
+
+                DropdownMenuItem(
+                    text = { Text("Français") },
+                    onClick = {
+                        changeLanguage("fr", context, scope)
+                        langMenu = false
+                    }
                 )
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -1499,4 +1551,50 @@ class RoundedPolygonShape(
         path.transform(matrix)
         return Outline.Generic(path)
     }
+}
+
+@SuppressLint("MissingPermission")
+fun detectCountry(
+    context: Context,
+    onResult: (String) -> Unit
+) {
+    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+        if (location != null) {
+            val geocoder = Geocoder(context, Locale.getDefault())
+            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+            val countryCode = addresses?.firstOrNull()?.countryCode ?: "US"
+            onResult(countryCode)
+        } else {
+            onResult("UK")
+        }
+    }
+}
+
+fun countryToLanguage(country: String): String {
+    return when (country) {
+        "IT" -> "it"
+        "FR" -> "fr"
+        "DE" -> "de"
+        "ES" -> "es"
+        else -> "en"
+    }
+}
+
+fun setAppLocale(context: Context, language: String) {
+    val locale = Locale(language)
+    Locale.setDefault(locale)
+
+    val config = context.resources.configuration
+    config.setLocale(locale)
+
+    context.resources.updateConfiguration(config, context.resources.displayMetrics)
+}
+
+fun changeLanguage(lang: String, context: Context, scope: CoroutineScope) {
+    setAppLocale(context, lang)
+    scope.launch {
+        context.dataStore.edit { it[LANGUAGE_KEY] = lang }
+    }
+    (context as android.app.Activity).recreate()
 }
