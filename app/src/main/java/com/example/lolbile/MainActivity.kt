@@ -24,9 +24,14 @@ import androidx.navigation.compose.*
 import com.example.lolbile.ui.theme.LoLbileTheme
 import android.content.Context
 import android.credentials.GetCredentialException
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
@@ -37,6 +42,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material.ExperimentalMaterialApi
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
@@ -78,6 +84,11 @@ import ru.gildor.coroutines.okhttp.await
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
+import androidx.core.content.FileProvider
+import kotlinx.coroutines.CoroutineScope
+import okhttp3.MultipartBody
+import java.io.File
+import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity() {
 
@@ -545,6 +556,7 @@ fun Navigation() {
         composable("home") { HomeScreen(navController) }
         composable("login") { LoginScreen(navController) }
         composable("register") { RegisterScreen(navController) }
+        composable("settings") { SettingsScreen(navController) }
         composable(
             route = "player/{playerName}",
             arguments = listOf(navArgument("playerName") { type = NavType.StringType })
@@ -621,7 +633,10 @@ fun TopLayout(
                         HorizontalDivider()
                         DropdownMenuItem(
                             text = { Text("Settings") },
-                            onClick = { menuExpanded = false }
+                            onClick = {
+                                menuExpanded = false
+                                navController.navigate("settings")
+                            }
                         )
                         DropdownMenuItem(
                             text = { Text("Logout") },
@@ -777,6 +792,180 @@ fun PlayerScreen(navController: NavController, playerName: String) {
             }
         }
     }
+}
+
+@Composable
+fun SettingsScreen(navController: NavController) {
+
+    val context = LocalContext.current
+    var username by remember { mutableStateOf(UserSession.userName ?: "") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+    var uploading by remember { mutableStateOf(false) }
+    var showPickerDialog by remember { mutableStateOf(false) }
+    val cameraTempUri = remember { mutableStateOf<Uri?>(null) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            imageUri = uri
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            imageUri = cameraTempUri.value
+        }
+    }
+
+    Scaffold(
+
+    ) { padding ->
+
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(24.dp)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            if (showPickerDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPickerDialog = false },
+                    title = { Text("Change profile photo") },
+                    text = { Text("Choose image source") },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showPickerDialog = false
+                            galleryLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        }) { Text("Gallery") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showPickerDialog = false
+                            val uri = createImageUri(context)
+                            cameraTempUri.value = uri
+                            cameraLauncher.launch(uri)
+                        }) { Text("Camera") }
+                    }
+                )
+            }
+            Box {
+                val avatarModel = imageUri ?: UserSession.userPhotoUrl
+                if (avatarModel != null) {
+                    AsyncImage(
+                        model = avatarModel,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(140.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.AccountCircle,
+                        contentDescription = null,
+                        modifier = Modifier.size(140.dp)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { showPickerDialog = true }
+                        .padding(8.dp)
+                ) {
+                    Icon(Icons.Default.Edit, null, tint = Color.White)
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                label = { Text("Username") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(24.dp))
+
+            Button(
+                onClick = {
+                    uploading = true
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val newUrl = uploadProfileData(username, imageUri, context)
+                        withContext(Dispatchers.Main) {
+                            UserSession.userName = username
+                            newUrl?.let { UserSession.userPhotoUrl = it }
+                            uploading = false
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (uploading) CircularProgressIndicator(color = Color.White)
+                else Text("Save changes")
+            }
+        }
+    }
+}
+
+fun createImageUri(context: Context): Uri {
+    val file = File(context.cacheDir, "camera_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.provider",
+        file
+    )
+}
+
+fun saveBitmapToCache(context: Context, bitmap: Bitmap): Uri {
+    val file = File(context.cacheDir, "avatar_${System.currentTimeMillis()}.jpg")
+    FileOutputStream(file).use {
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)
+    }
+    return FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.provider",
+        file
+    )
+}
+
+fun uploadProfileData(
+    username: String,
+    imageUri: Uri?,
+    context: Context
+): String? {
+    val client = OkHttpClient()
+    val builder = MultipartBody.Builder().setType(MultipartBody.FORM)
+        .addFormDataPart("username", username)
+    imageUri?.let {
+        val stream = context.contentResolver.openInputStream(it)!!
+        val bytes = stream.readBytes()
+        builder.addFormDataPart(
+            "avatar",
+            "avatar.jpg",
+            bytes.toRequestBody("image/jpeg".toMediaType())
+        )
+    }
+    val request = Request.Builder()
+        .url("http://10.0.2.2:8080/api/account/image")
+        .addHeader("Authorization", "Bearer ${UserSession.appAuthToken}")
+        .post(builder.build())
+        .build()
+
+    val response = client.newCall(request).execute()
+
+    if (!response.isSuccessful) return null
+
+    val json = JSONObject(response.body!!.string())
+    return json.getString("avatarUrl")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1032,6 +1221,7 @@ fun ChampionRotations(isLogged: Boolean){
             Text("Champion rotations", fontSize = 22.sp)
         }
         else {
+            /*
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -1052,6 +1242,8 @@ fun ChampionRotations(isLogged: Boolean){
                     lineHeight = 24.sp
                 )
             }
+            */
+
         }
     }
 }
