@@ -637,9 +637,14 @@ suspend fun searchPlayer(riotID: String, tag: String): Boolean{
         .build()
     val response = client.newCall(request).await()
     try {
-        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+        if (!response.isSuccessful)
+        {
+            throw IOException("Unexpected code $response")
+        }
 
+        Log.d("SEARCH STATUS","clearing player information")
         SearchedPlayer.clear()
+        Log.d("SEARCH STATUS","The value of gamesFetched is now: ${SearchedPlayer.gamesFetched}")
         val jsonData = response.body!!.string()
         val jsonObj = JSONObject(jsonData)
         val summoner = jsonObj.getJSONObject("summoner")
@@ -926,7 +931,7 @@ fun HomeScreen(navController: NavController) {
                 }
             }
             when (selectedTab) {
-                0 -> Dashboard(isFound)
+                0 -> Dashboard(isFound,searchText)
                 1 -> Leaderboard()
                 2 -> ChampionRotations(isFound)
             }
@@ -1154,23 +1159,28 @@ fun restoreGoogleSession(context: Context) {
 }
 
 @Composable
-fun Dashboard(isFound: Boolean) {
+fun Dashboard(isFound: Boolean, playerName: String) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
         if (isFound) {
+            var playerNameState by remember { mutableStateOf<String>("") }
+            playerNameState = playerName
             var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
             var loading by remember { mutableStateOf(true) }
             var refreshing by remember { mutableStateOf(false) }
+            var isWon = false
 
             suspend fun loadData() {
                 matches = fillGames()
             }
 
-            LaunchedEffect(Unit) {
+            LaunchedEffect(playerNameState) {
+                Log.d("SEARCH STATUS", "The value of the fetch is : ${SearchedPlayer.gamesFetched}")
                 if(SearchedPlayer.gamesFetched == false) {
                     loadData()
                     loading = false
+                    Log.d("SEARCH STATUS", "The value of the fetch is : ${SearchedPlayer.gamesFetched}")
                 }
             }
 
@@ -1203,6 +1213,20 @@ fun Dashboard(isFound: Boolean) {
                                 contentAlignment = Alignment.Center,
                                 modifier = Modifier.padding(top = 6.dp, start = 6.dp),
                             ) {
+                                AsyncImage(
+                                    model = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/${SearchedPlayer.profileIcon}.jpg",
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .graphicsLayer {
+                                            this.shadowElevation = 6.dp.toPx()
+                                            this.shape = clip
+                                            this.clip = true
+                                            this.ambientShadowColor = Color.Black
+                                            this.spotShadowColor = Color.Black
+                                        }
+                                        .size(200.dp)
+                                )
                                 Text(
                                     text = SearchedPlayer.summonerLevel.toString(),
                                     modifier = Modifier.padding(top = 180.dp),
@@ -1213,7 +1237,9 @@ fun Dashboard(isFound: Boolean) {
                             }
                         }
                         Column(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 5.dp),
 
                             ) {
                             Row(
@@ -1260,7 +1286,37 @@ fun Dashboard(isFound: Boolean) {
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             items(matches) { match ->
-                                MatchCard(match)
+                                var color = Color(1f,0f,0f,0.70f)
+                                val playerName = SearchedPlayer.userName
+                                val teamWon = match.winner
+                                if(teamWon)
+                                {
+                                    val team2 = match.team2
+                                    for(i in 0..4)
+                                    {
+                                        val player = team2[i]
+                                        if(player.getString("playerId").lowercase() == playerName.toString())
+                                        {
+                                            color = Color(0f,0f,1f,0.70f)
+                                            break
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    val team1 = match.team1
+                                    for(i in 0..4)
+                                    {
+                                        val player = team1[i]
+                                        if(player.getString("playerId").lowercase() == playerName.toString())
+                                        {
+                                            color = Color(0f,0f,1f,0.70f)
+                                            break
+                                        }
+                                    }
+                                }
+
+                                MatchCard(match, color)
                             }
                         }
                     }
@@ -1426,73 +1482,91 @@ fun PlayerCard(player: Player, position: Int) {
 }
 
 @Composable
-fun MatchCard(match: Match){
+fun MatchCard(match: Match, color: Color){
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(4.dp)
+        border = CardDefaults.outlinedCardBorder(),
+        elevation = CardDefaults.cardElevation(4.dp),
+        shape = _root_ide_package_.androidx.compose.ui.graphics.RectangleShape,
+        colors = CardDefaults.cardColors(color)
     ) {
         Row()
         {
-            Column(modifier = Modifier.border(width = 1.dp, Color.Green).padding(end = 5.dp).fillMaxWidth(0.5f)) {
+            Column(modifier = Modifier
+                .padding(start = 5.dp)
+                .fillMaxWidth(0.5f)) {
                 Row(
-                    modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth()
                     )
                 {
 
                     Text(
-                        text = "${match.team1[0].getString("playerId")}"
+                        text = "${match.team1[0].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team1[1].getString("playerId")}"
+                        text = "${match.team1[1].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team1[2].getString("playerId")}"
+                        text = "${match.team1[2].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team1[3].getString("playerId")}"
+                        text = "${match.team1[3].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Blue).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team1[4].getString("playerId")}"
+                        text = "${match.team1[4].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
             }
-            Column(modifier = Modifier.border(width = 1.dp, Color.Green).fillMaxWidth()) {
-                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+            Column(modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 5.dp)) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team2[0].getString("playerId")}"
+                        text = "${match.team2[0].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team2[1].getString("playerId")}"
+                        text = "${match.team2[1].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team2[2].getString("playerId")}"
+                        text = "${match.team2[2].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team2[3].getString("playerId")}"
+                        text = "${match.team2[3].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
-                Row(modifier = Modifier.border(width = 1.dp, Color.Red).fillMaxWidth()) {
+                Row(modifier = Modifier.fillMaxWidth()) {
                     Text(
-                        text = "${match.team2[4].getString("playerId")}"
+                        text = "${match.team2[4].getString("playerId")}",
+                        fontSize = 12.sp
                     )
                 }
             }
         }
     }
+
 }
 
 @Composable
