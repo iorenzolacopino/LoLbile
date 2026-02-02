@@ -30,7 +30,8 @@
             android:exported="true"
             android:theme="@style/Theme.LoLbile"
             android:configChanges="orientation|screenSize|keyboardHidden"
-            android:screenOrientation="portrait">
+            android:screenOrientation="portrait"
+            android:forceDarkAllowed="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
