@@ -127,35 +127,82 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import java.util.concurrent.TimeUnit
 import kotlin.collections.emptyList
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 
 
 val Context.dataStore by preferencesDataStore("settings")
 val LANGUAGE_KEY = stringPreferencesKey("language")
 
 class MainActivity : ComponentActivity() {
+    private lateinit var lightManager: LightSensorManager
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             val savedLang = applicationContext.dataStore.data.first()[LANGUAGE_KEY]
-
             val langToApply = savedLang ?: "en"
-
             setAppLanguage(langToApply)
+        }
 
-            setContent {
-                LoLbileTheme {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.background
-                    ) {
-                        Navigation()
-                    }
+        super.onCreate(savedInstanceState)
+
+        lightManager = LightSensorManager(this)
+
+        setContent {
+            LoLbileTheme {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    Navigation()
                 }
             }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        lightManager.start()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        lightManager.stop()
+    }
+}
+
+class LightSensorManager(private val context: Context) : SensorEventListener {
+
+    private val sensorManager =
+        context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+    private val lightSensor: Sensor? =
+        sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+
+    fun start() {
+        lightSensor?.also {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    fun stop() {
+        sensorManager.unregisterListener(this)
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        val lux = event.values[0]
+
+        if (lux < 40) {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        } else {
+            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
 
 var hasSearched by mutableStateOf(false)
@@ -815,9 +862,8 @@ fun TopLayout(
                         langMenu = false
                         detectCountry(context) { country ->
                             val lang = countryToLanguage(country)
-
                             setAppLanguage(lang)
-
+                            (context as Activity).recreate()
                             scope.launch {
                                 context.dataStore.edit { it[LANGUAGE_KEY] = lang }
                             }
@@ -832,6 +878,7 @@ fun TopLayout(
                             context.dataStore.edit { it[LANGUAGE_KEY] = "it" }
                         }
                         setAppLanguage("it")
+                        (context as Activity).recreate()
                         langMenu = false
                     }
                 )
@@ -843,6 +890,7 @@ fun TopLayout(
                             context.dataStore.edit { it[LANGUAGE_KEY] = "en" }
                         }
                         setAppLanguage("en")
+                        (context as Activity).recreate()
                         langMenu = false
                     }
                 )
