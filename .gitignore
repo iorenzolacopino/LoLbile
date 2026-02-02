@@ -28,6 +28,7 @@ local.properties
 *.keystore
 *.p12
 *.properties
+!resources.properties
 signing.properties
 
 # --- External Native Build ---
