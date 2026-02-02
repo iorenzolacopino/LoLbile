@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">LoLbile</string>
+    <string name="welcome">Welcome to LoLbile</string>
+    <string name="or">or</string>
+    <string name="first_time">If it\'s your first time here, register</string>
+    <string name="create_account">Create account</string>
+    <string name="already_have_account">Already have an account? Login</string>
+    <string name="login_google">Login with Google</string>
+    <string name="register">Register</string>
+    <string name="search">Search</string>
+    <string name="settings">Settings</string>
+    <string name="search_players">Search players...</string>
+    <string name="save_changes">Save changes</string>
+    <string name="search_player">Search for a player</string>
+    <string name="leaderboard">Leaderboard (top 20)</string>
+    <string name="not_found">The player has not been found</string>
 </resources>

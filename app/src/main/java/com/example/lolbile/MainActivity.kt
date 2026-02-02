@@ -2,6 +2,7 @@ package com.example.lolbile
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.Configuration
 import android.credentials.GetCredentialException
 import android.net.Uri
 import android.os.Build
@@ -112,6 +113,9 @@ import java.io.IOException
 import kotlin.math.max
 import java.util.Locale
 import kotlinx.coroutines.flow.first
+import androidx.compose.ui.res.stringResource
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 
 val Context.dataStore by preferencesDataStore("settings")
 val LANGUAGE_KEY = stringPreferencesKey("language")
@@ -123,13 +127,17 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             val savedLang = applicationContext.dataStore.data.first()[LANGUAGE_KEY]
-            savedLang?.let { setAppLocale(this@MainActivity, it) }
+
+            val langToApply = savedLang ?: "en"
+
+            setAppLanguage(langToApply)
+
             setContent {
                 LoLbileTheme {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
-                    ){
+                    ) {
                         Navigation()
                     }
                 }
@@ -193,7 +201,7 @@ fun LoginScreen(navController: NavController) {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
-            text = "Welcome to LoLbile",
+            text = stringResource(R.string.welcome),
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
@@ -241,7 +249,7 @@ fun LoginScreen(navController: NavController) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text("or", color = Color.Gray)
+        Text(stringResource(R.string.or), color = Color.Gray)
         Spacer(modifier = Modifier.height(16.dp))
         ButtonUI(navController)
 
@@ -251,7 +259,7 @@ fun LoginScreen(navController: NavController) {
             onClick = { navController.navigate("register") }
         ) {
             Text(
-                text = "If it's your first time here, register",
+                text = stringResource(R.string.first_time),
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable {
                     navController.navigate("register")
@@ -278,7 +286,7 @@ fun RegisterScreen(navController: NavController) {
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Create account", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.create_account), fontSize = 24.sp, fontWeight = FontWeight.Bold)
 
         Spacer(Modifier.height(32.dp))
 
@@ -326,7 +334,7 @@ fun RegisterScreen(navController: NavController) {
         Spacer(Modifier.height(12.dp))
 
         TextButton(onClick = { navController.navigate("login") }) {
-            Text("Already have an account? Login")
+            Text(stringResource(R.string.already_have_account))
         }
     }
 }
@@ -385,7 +393,7 @@ fun ButtonUI(navController: NavController) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Spacer(Modifier.width(8.dp))
-        Text("Login with Google", color = Color.White)
+        Text(stringResource(R.string.login_google), color = Color.White)
     }
 }
 
@@ -455,7 +463,7 @@ fun RegisterButton(username: String, email: String, password: String, navControl
         modifier = Modifier.fillMaxWidth()
     ) {
         Spacer(Modifier.width(8.dp))
-        Text("Register", color = Color.White)
+        Text(stringResource(R.string.register), color = Color.White)
     }
 }
 
@@ -631,7 +639,7 @@ fun SearchButton(player: String){
         onClick = onClick,
     ) {
         Spacer(Modifier.width(6.dp))
-        Text("Search", color = Color.White)
+        Text(stringResource(R.string.search), color = Color.White)
     }
 }
 
@@ -785,11 +793,12 @@ fun TopLayout(
                         langMenu = false
                         detectCountry(context) { country ->
                             val lang = countryToLanguage(country)
-                            setAppLocale(context, lang)
+
+                            setAppLanguage(lang)
+
                             scope.launch {
                                 context.dataStore.edit { it[LANGUAGE_KEY] = lang }
                             }
-                            (context as android.app.Activity).recreate()
                         }
                     }
                 )
@@ -797,7 +806,10 @@ fun TopLayout(
                 DropdownMenuItem(
                     text = { Text("Italiano") },
                     onClick = {
-                        changeLanguage("it", context, scope)
+                        scope.launch {
+                            context.dataStore.edit { it[LANGUAGE_KEY] = "it" }
+                        }
+                        setAppLanguage("it")
                         langMenu = false
                     }
                 )
@@ -805,18 +817,21 @@ fun TopLayout(
                 DropdownMenuItem(
                     text = { Text("English") },
                     onClick = {
-                        changeLanguage("en", context, scope)
+                        scope.launch {
+                            context.dataStore.edit { it[LANGUAGE_KEY] = "en" }
+                        }
+                        setAppLanguage("en")
                         langMenu = false
                     }
                 )
-
+                /*
                 DropdownMenuItem(
                     text = { Text("Français") },
                     onClick = {
                         changeLanguage("fr", context, scope)
                         langMenu = false
                     }
-                )
+                )*/
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text("LoLbile", fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -847,7 +862,7 @@ fun TopLayout(
                         )
                         HorizontalDivider()
                         DropdownMenuItem(
-                            text = { Text("Settings") },
+                            text = { Text(stringResource(R.string.settings)) },
                             onClick = {
                                 menuExpanded = false
                                 navController.navigate("settings")
@@ -869,7 +884,7 @@ fun TopLayout(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Register") },
+                            text = { Text(stringResource(R.string.register)) },
                             onClick = {
                                 menuExpanded = false
                                 navController.navigate("register")
@@ -885,7 +900,7 @@ fun TopLayout(
         OutlinedTextField(
             value = searchText,
             onValueChange = onSearchTextChange,
-            placeholder = { Text("Search players...") },
+            placeholder = { Text(stringResource(R.string.search_players)) },
             singleLine = true,
             modifier = Modifier
                 .fillMaxWidth()
@@ -906,7 +921,7 @@ fun TopLayout(
 fun HomeScreen(navController: NavController) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var searchText by remember { mutableStateOf("") }
-    val tabs = listOf("Dashboard", "Leaderboard (top 20)", "Champion rotations")
+    val tabs = listOf("Dashboard", stringResource(R.string.leaderboard), "Champion rotations")
     val isFound = SearchedPlayer.userName != null
     Scaffold(
         topBar = {
@@ -1064,7 +1079,7 @@ fun SettingsScreen(navController: NavController) {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 if (uploading) CircularProgressIndicator(color = Color.White)
-                else Text("Save changes")
+                else Text(stringResource(R.string.save_changes))
             }
         }
     }
@@ -1340,7 +1355,7 @@ fun Dashboard(isFound: Boolean, hasSearched: Boolean) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Text(
-                        text = "The player has not been found",
+                        text = stringResource(R.string.not_found),
                         fontSize = 18.sp,
                         textAlign = TextAlign.Center,
                         color = Color.Gray,
@@ -1366,7 +1381,7 @@ fun Dashboard(isFound: Boolean, hasSearched: Boolean) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Search for a Player",
+                    text = stringResource(R.string.search_player),
                     fontSize = 18.sp,
                     textAlign = TextAlign.Center,
                     color = Color.Gray,
@@ -1705,7 +1720,7 @@ fun detectCountry(
         if (location != null) {
             val geocoder = Geocoder(context, Locale.getDefault())
             val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-            val countryCode = addresses?.firstOrNull()?.countryCode ?: "US"
+            val countryCode = addresses?.firstOrNull()?.countryCode ?: "UK"
             onResult(countryCode)
         } else {
             onResult("UK")
@@ -1723,20 +1738,7 @@ fun countryToLanguage(country: String): String {
     }
 }
 
-fun setAppLocale(context: Context, language: String) {
-    val locale = Locale(language)
-    Locale.setDefault(locale)
-
-    val config = context.resources.configuration
-    config.setLocale(locale)
-
-    context.resources.updateConfiguration(config, context.resources.displayMetrics)
-}
-
-fun changeLanguage(lang: String, context: Context, scope: CoroutineScope) {
-    setAppLocale(context, lang)
-    scope.launch {
-        context.dataStore.edit { it[LANGUAGE_KEY] = lang }
-    }
-    (context as android.app.Activity).recreate()
+fun setAppLanguage(language: String) {
+    val locales = LocaleListCompat.forLanguageTags(language)
+    AppCompatDelegate.setApplicationLocales(locales)
 }
