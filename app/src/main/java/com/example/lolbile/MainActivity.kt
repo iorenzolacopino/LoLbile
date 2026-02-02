@@ -113,6 +113,8 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+var hasSearched by mutableStateOf(false)
+
 object UserSession {
     var userName by mutableStateOf<String?>(null)
     var userPhotoUrl by mutableStateOf<String?>(null)
@@ -123,7 +125,6 @@ object UserSession {
         appAuthToken = null
     }
 }
-var refreshDashBoard by mutableStateOf<Boolean>(false)
 
 object SearchedPlayer {
     var userName by mutableStateOf<String?>(null)
@@ -617,9 +618,12 @@ suspend fun searchPlayer(riotID: String, tag: String): Boolean{
         .build()
     val response = client.newCall(request).await()
     try {
-        if (!response.isSuccessful)
+        hasSearched = true
+        if (response.code == 404)
         {
-            throw IOException("Unexpected code $response")
+            Log.d("SEARCH STATUS", "Player not found")
+            SearchedPlayer.clear()
+            return false
         }
 
         Log.d("SEARCH STATUS","clearing player information")
@@ -633,13 +637,12 @@ suspend fun searchPlayer(riotID: String, tag: String): Boolean{
         SearchedPlayer.summonerLevel = summoner.getInt("summoner_level")
         SearchedPlayer.soloQ = summoner.getString("soloq_rank")
         SearchedPlayer.flexQ = summoner.getString("flex_rank")
-
         SearchedPlayer.games = summoner.getJSONArray("games")
-        refreshDashBoard = true
         return true
 
     } catch (e: Exception) {
         Log.e("SERVER_ERROR", "Server error", e)
+        SearchedPlayer.clear()
         return false
     } finally {
         response.close();
@@ -877,7 +880,7 @@ fun HomeScreen(navController: NavController) {
                 }
             }
             when (selectedTab) {
-                0 -> Dashboard(isFound)
+                0 -> Dashboard(isFound, hasSearched)
                 1 -> Leaderboard()
                 2 -> ChampionRotations(isFound)
             }
@@ -1105,161 +1108,184 @@ fun restoreGoogleSession(context: Context) {
 }
 
 @Composable
-fun Dashboard(isFound: Boolean) {
+fun Dashboard(isFound: Boolean, hasSearched: Boolean) {
     Box(
         modifier = Modifier.fillMaxSize()
     ) {
-        if (isFound) {
-            var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
-            var loading by remember { mutableStateOf(true) }
+        if(hasSearched) {
+            if (isFound) {
+                var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
+                var loading by remember { mutableStateOf(true) }
 
-            suspend fun loadData() {
-                matches = fillGames()
-            }
-
-            LaunchedEffect(SearchedPlayer.gamesFetched)
-            {
-                loadData()
-                loading = false
-                refreshDashBoard = false
-            }
-
-            if (loading) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator()
-                }
-            }
-            else {
-
-                val hexagon = remember {
-                    RoundedPolygon(
-                        6,
-                        rounding = CornerRounding(0.2f)
-                    )
+                suspend fun loadData() {
+                    matches = fillGames()
                 }
 
-                val clip = remember(hexagon) {
-                    RoundedPolygonShape(polygon = hexagon)
+                LaunchedEffect(SearchedPlayer.gamesFetched)
+                {
+                    loadData()
+                    loading = false
                 }
 
-                Column(){
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                if (loading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else {
 
-                        Column() {
-                            Box(
-                                contentAlignment = Alignment.Center,
-                                modifier = Modifier.padding(top = 6.dp, start = 6.dp),
-                            ) {
-                                AsyncImage(
-                                    model = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/${SearchedPlayer.profileIcon}.jpg",
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier
-                                        .graphicsLayer {
-                                            this.shadowElevation = 6.dp.toPx()
-                                            this.shape = clip
-                                            this.clip = true
-                                            this.ambientShadowColor = Color.Black
-                                            this.spotShadowColor = Color.Black
-                                        }
-                                        .size(200.dp)
-                                )
-                                Text(
-                                    text = SearchedPlayer.summonerLevel.toString(),
-                                    modifier = Modifier.padding(top = 180.dp),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 30.sp,
+                    val hexagon = remember {
+                        RoundedPolygon(
+                            6,
+                            rounding = CornerRounding(0.2f)
+                        )
+                    }
 
+                    val clip = remember(hexagon) {
+                        RoundedPolygonShape(polygon = hexagon)
+                    }
+
+                    Column() {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+
+                            Column() {
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier.padding(top = 6.dp, start = 6.dp),
+                                ) {
+                                    AsyncImage(
+                                        model = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/${SearchedPlayer.profileIcon}.jpg",
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier
+                                            .graphicsLayer {
+                                                this.shadowElevation = 6.dp.toPx()
+                                                this.shape = clip
+                                                this.clip = true
+                                                this.ambientShadowColor = Color.Black
+                                                this.spotShadowColor = Color.Black
+                                            }
+                                            .size(200.dp)
                                     )
-                            }
-                        }
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 5.dp),
+                                    Text(
+                                        text = SearchedPlayer.summonerLevel.toString(),
+                                        modifier = Modifier.padding(top = 180.dp),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 30.sp,
 
-                            ) {
-                            Row(
+                                        )
+                                }
+                            }
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(bottom = 5.dp)
+                                    .padding(start = 5.dp),
+
+                                ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 5.dp)
+                                ) {
+                                    Text(
+
+                                        text = SearchedPlayer.userName.toString(),
+                                        fontFamily = FontFamily.SansSerif,
+                                        fontSize = 20.sp,
+                                    )
+                                }
+                                Row()
+                                {
+                                    Column() {
+                                        Text(
+                                            text = "Solo Q Rank:"
+                                        )
+                                        Text(
+                                            text = SearchedPlayer.soloQ.toString(),
+                                        )
+                                    }
+                                }
+                                Row()
+                                {
+                                    Column() {
+                                        Text(
+                                            text = "Flex Q Rank:"
+                                        )
+                                        Text(
+                                            text = SearchedPlayer.flexQ.toString(),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        Row(modifier = Modifier.fillMaxWidth())
+                        {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth(),
+                                contentPadding = PaddingValues(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(
+                                items(matches) { match ->
+                                    var color = Color(255, 128, 128)
+                                    val playerName = SearchedPlayer.userName
+                                    val teamWon = match.winner
+                                    if (teamWon) {
+                                        val team2 = match.team2
+                                        for (i in 0..4) {
+                                            val player = team2[i]
+                                            if (player.getString("playerId")
+                                                    .lowercase() == playerName.toString()
+                                            ) {
+                                                color = Color(119, 145, 236)
+                                                break
+                                            }
+                                        }
+                                    } else {
+                                        val team1 = match.team1
+                                        for (i in 0..4) {
+                                            val player = team1[i]
+                                            if (player.getString("playerId")
+                                                    .lowercase() == playerName.toString()
+                                            ) {
+                                                color = Color(119, 145, 236)
+                                                break
+                                            }
+                                        }
+                                    }
 
-                                    text = SearchedPlayer.userName.toString(),
-                                    fontFamily = FontFamily.SansSerif,
-                                    fontSize = 20.sp,
-                                )
-                            }
-                            Row()
-                            {
-                                Column() {
-                                    Text(
-                                        text = "Solo Q Rank:"
-                                    )
-                                    Text(
-                                        text = SearchedPlayer.soloQ.toString(),
-                                    )
-                                }
-                            }
-                            Row()
-                            {
-                                Column() {
-                                    Text(
-                                        text = "Flex Q Rank:"
-                                    )
-                                    Text(
-                                        text = SearchedPlayer.flexQ.toString(),
-                                    )
+                                    MatchCard(match, color)
                                 }
                             }
                         }
                     }
-                    Row(modifier = Modifier.fillMaxWidth())
-                    {
-                        LazyColumn(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(matches) { match ->
-                                var color = Color(255, 128, 128)
-                                val playerName = SearchedPlayer.userName
-                                val teamWon = match.winner
-                                if(teamWon)
-                                {
-                                    val team2 = match.team2
-                                    for(i in 0..4)
-                                    {
-                                        val player = team2[i]
-                                        if(player.getString("playerId").lowercase() == playerName.toString())
-                                        {
-                                            color = Color(119, 145, 236)
-                                            break
-                                        }
-                                    }
-                                }
-                                else
-                                {
-                                    val team1 = match.team1
-                                    for(i in 0..4)
-                                    {
-                                        val player = team1[i]
-                                        if(player.getString("playerId").lowercase() == playerName.toString())
-                                        {
-                                            color = Color(119, 145, 236)
-                                            break
-                                        }
-                                    }
-                                }
+                }
+            }
+            else
+            {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(40.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        modifier = Modifier.size(48.dp),
+                        tint = Color.Gray
+                    )
 
-                                MatchCard(match, color)
-                            }
-                        }
-                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "The player has not been found",
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center,
+                        color = Color.Gray,
+                        lineHeight = 24.sp
+                    )
                 }
             }
         }
