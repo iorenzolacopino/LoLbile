@@ -118,6 +118,8 @@ import java.util.Locale
 import kotlin.math.max
 
 
+var cdn = "http://34.120.96.92/"
+
 val Context.dataStore by preferencesDataStore("settings")
 val LANGUAGE_KEY = stringPreferencesKey("language")
 
@@ -1180,7 +1182,8 @@ fun SettingsScreen(navController: NavController) {
                         }
 
                         imageUri?.let {
-                            newAvatarUrl = updateProfileImage(it, context)
+                            updateProfileImage(it, context)
+                            newAvatarUrl = getProfileImage()
                             avatarOk = newAvatarUrl != null
                             if (avatarOk) {
                                 UserSession.userPhotoUrl = newAvatarUrl
@@ -1242,36 +1245,49 @@ suspend fun updateUsername(username: String): Boolean = withContext(Dispatchers.
     }
 }
 
-suspend fun updateProfileImage(imageUri: Uri, context: Context): String? = withContext(Dispatchers.IO) {
+suspend fun updateProfileImage(imageUri: Uri, context: Context){
     try {
         val client = OkHttpClient()
 
         val bytes = context.contentResolver.openInputStream(imageUri)!!.readBytes()
 
-        val body = MultipartBody.Builder()
-            .setType(MultipartBody.FORM)
-            .addFormDataPart(
-                "profile_image",
-                "avatar.jpeg", // link
-                bytes.toRequestBody("image/jpeg".toMediaType())
-            )
-            .build()
-
         val request = Request.Builder()
             .url("http://10.0.2.2:8080/api/account/image")
-            .addHeader("google_id", "${UserSession.appAuthToken}")
-            .post(body)
+            .addHeader("Authorization", "${UserSession.appAuthToken}")
+            .patch(bytes.toRequestBody("image/jpeg".toMediaType()))
             .build()
 
-        val response = client.newCall(request).execute()
-        if (!response.isSuccessful) return@withContext null
+        val response = client.newCall(request).await()
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
 
-        val json = JSONObject(response.body!!.string())
-        json.getString("profile_image")
+        response.body!!.string()
 
     } catch (e: Exception) {
         Log.e("UPDATE", "Error", e)
-        null
+    }
+}
+
+suspend fun getProfileImage() : String
+{
+    val client = OkHttpClient()
+    val url = "http://10.0.2.2/api/account/image"
+    val request = Request.Builder()
+        .url(url)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+
+        val jsonData = JSONObject(response.body!!.string())
+        val imageUrl = jsonData.getString("image")
+        return imageUrl
+
+
+    } catch (e: Exception) {
+        Log.e("UPDATE", "Error", e)
+        return ""
+    }finally {
+        response.close()
     }
 }
 
@@ -1851,7 +1867,7 @@ fun detectCountry(
 
     Log.d("COUNTRY CODE", "is google play available: ${getErrorString(isGooglePlayServicesAvailable(context))}")
     Log.d("COUNTRY CODE", "current country code is")
-    Log.d("COUNTRY CODE", "last location is: ${fusedLocationClient.lastLocation}")
+    Log.d("COUNTRY CODE", "last location is successful?: ${fusedLocationClient.lastLocation}")
     fusedLocationClient.lastLocation.addOnSuccessListener { location : Location?->
         Log.d("COUNTRY CODE", "last location is: ${fusedLocationClient.lastLocation}")
         if (location != null) {
