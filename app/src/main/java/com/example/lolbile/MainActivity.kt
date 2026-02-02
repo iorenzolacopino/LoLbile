@@ -131,21 +131,17 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-
+import android.widget.Toast;
+import androidx.appcompat.app.AppCompatActivity
 
 val Context.dataStore by preferencesDataStore("settings")
 val LANGUAGE_KEY = stringPreferencesKey("language")
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private lateinit var lightManager: LightSensorManager
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
-        lifecycleScope.launch {
-            val savedLang = applicationContext.dataStore.data.first()[LANGUAGE_KEY]
-            val langToApply = savedLang ?: "en"
-            setAppLanguage(langToApply)
-        }
 
         super.onCreate(savedInstanceState)
 
@@ -431,7 +427,6 @@ suspend fun signIn(request: GetCredentialRequest, context: Context){
     }
 }
 
-// BUTTONS DEFINITIONS
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun ButtonUI(navController: NavController) {
@@ -1134,15 +1129,38 @@ fun SettingsScreen(navController: NavController) {
 
             Spacer(Modifier.height(24.dp))
 
+            val scope = rememberCoroutineScope()
+
             Button(
                 onClick = {
                     uploading = true
-                    CoroutineScope(Dispatchers.IO).launch {
-                        val newUrl = uploadProfileData(username, imageUri, context)
-                        withContext(Dispatchers.Main) {
-                            UserSession.userName = username
-                            newUrl?.let { UserSession.userPhotoUrl = it }
-                            uploading = false
+
+                    scope.launch {
+                        var usernameOk = true
+                        var avatarOk = true
+                        var newAvatarUrl: String? = null
+
+                        if (username != UserSession.userName) {
+                            usernameOk = updateUsername(username)
+                            if (usernameOk) UserSession.userName = username
+                        }
+
+                        imageUri?.let {
+                            newAvatarUrl = updateProfileImage(it, context)
+                            avatarOk = newAvatarUrl != null
+                            if (avatarOk) {
+                                UserSession.userPhotoUrl = newAvatarUrl
+                            }
+                        }
+
+                        uploading = false
+
+                        if (usernameOk && avatarOk) {
+                            navController.navigate("home") {
+                                popUpTo("settings") { inclusive = true }
+                            }
+                        } else {
+                            Toast.makeText(context, "Update failed", Toast.LENGTH_SHORT).show()
                         }
                     }
                 },
@@ -1164,85 +1182,64 @@ fun createImageUri(context: Context): Uri {
     )
 }
 
-fun saveBitmapToCache(context: Context, bitmap: Bitmap): Uri {
-    val file = File(context.cacheDir, "avatar_${System.currentTimeMillis()}.jpg")
-    FileOutputStream(file).use {
-        bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it)
-    }
-    return FileProvider.getUriForFile(
-        context,
-        "${context.packageName}.provider",
-        file
-    )
-}
+suspend fun updateUsername(username: String): Boolean = withContext(Dispatchers.IO) {
+    try {
+        val client = OkHttpClient()
 
-fun uploadProfileData(
-    username: String,
-    imageUri: Uri?,
-    context: Context
-): String? {
-    val client = OkHttpClient()
-    val builder = MultipartBody.Builder().setType(MultipartBody.FORM)
-        .addFormDataPart("username", username)
-    imageUri?.let {
-        val stream = context.contentResolver.openInputStream(it)!!
-        val bytes = stream.readBytes()
-        builder.addFormDataPart(
-            "avatar",
-            "avatar.jpg",
-            bytes.toRequestBody("image/jpeg".toMediaType())
-        )
-    }
-    val request = Request.Builder()
-        .url("http://10.0.2.2:8080/api/account/image")
-        .addHeader("Authorization", "Bearer ${UserSession.appAuthToken}")
-        .post(builder.build())
-        .build()
-
-    val response = client.newCall(request).execute()
-
-    if (!response.isSuccessful) return null
-
-    val json = JSONObject(response.body!!.string())
-    return json.getString("avatarUrl")
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun PlayerTopBar(navController: NavController) {
-    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
-    val isHome = currentRoute == "home"
-    TopAppBar(
-        title = {
-            Text(
-                "LoLbile",
-                fontWeight = FontWeight.Bold
-            )
-        },
-        navigationIcon = {
-            IconButton(
-                onClick = {
-                    if (!isHome) {
-                        navController.navigate("home") {
-                            popUpTo("home") { inclusive = false }
-                        }
-                    }
-                },
-                enabled = !isHome
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Home,
-                    contentDescription = "Home",
-                    tint = if (isHome)
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
-                    else
-                        MaterialTheme.colorScheme.onSurface
-                )
-            }
+        val json = JSONObject().apply {
+            put("username", username)
         }
-    )
+
+        val body = json.toString()
+            .toRequestBody("application/json".toMediaType())
+
+        val request = Request.Builder()
+            .url("http://10.0.2.2:8080/api/account")
+            .patch(body)
+            .addHeader("google_id", "${UserSession.appAuthToken}")
+            .build()
+
+        val response = client.newCall(request).execute()
+        response.isSuccessful
+
+    } catch (e: Exception) {
+        Log.e("USERNAME_UPDATE", "Error", e)
+        false
+    }
 }
 
+suspend fun updateProfileImage(imageUri: Uri, context: Context): String? = withContext(Dispatchers.IO) {
+    try {
+        val client = OkHttpClient()
+
+        val bytes = context.contentResolver.openInputStream(imageUri)!!.readBytes()
+
+        val body = MultipartBody.Builder()
+            .setType(MultipartBody.FORM)
+            .addFormDataPart(
+                "profile_image",
+                "avatar.jpeg", // link
+                bytes.toRequestBody("image/jpeg".toMediaType())
+            )
+            .build()
+
+        val request = Request.Builder()
+            .url("http://10.0.2.2:8080/api/account/image")
+            .addHeader("google_id", "${UserSession.appAuthToken}")
+            .post(body)
+            .build()
+
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) return@withContext null
+
+        val json = JSONObject(response.body!!.string())
+        json.getString("profile_image")
+
+    } catch (e: Exception) {
+        Log.e("UPDATE", "Error", e)
+        null
+    }
+}
 
 fun restoreGoogleSession(context: Context) {
     val account = GoogleSignIn.getLastSignedInAccount(context)
@@ -1732,7 +1729,8 @@ fun ChampionRotations() {
     else {
         HorizontalCenteredHeroCarousel(
             state = rememberCarouselState() { items.count() },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
                 .fillMaxHeight()
                 .padding(top = 16.dp, bottom = 16.dp),
             contentPadding = PaddingValues(horizontal = 16.dp),
@@ -1839,9 +1837,15 @@ fun countryToLanguage(country: String): String {
     }
 }
 
-fun setAppLanguage(language: String) {
-    val locales = LocaleListCompat.forLanguageTags(language)
-    AppCompatDelegate.setApplicationLocales(locales)
+fun setAppLanguage(context: Context, localeTag: String) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        context.getSystemService(LocaleManager::class.java).applicationLocales =
+            LocaleList.forLanguageTags(localeTag)
+    } else {
+        AppCompatDelegate.setApplicationLocales(
+            LocaleListCompat.forLanguageTags(localeTag)
+        )
+    }
 }
 
 suspend fun getChampionLoadScreenPath(championId: Int): String {
