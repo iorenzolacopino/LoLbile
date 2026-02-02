@@ -1,6 +1,7 @@
 package com.example.lolbile
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
 import android.credentials.GetCredentialException
 import android.net.Uri
@@ -76,7 +77,10 @@ import android.location.Geocoder
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.collection.emptyLongSet
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -97,6 +101,10 @@ import ru.gildor.coroutines.okhttp.await
 import kotlin.math.max
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material3.carousel.HorizontalCenteredHeroCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.unit.max
 import androidx.core.content.FileProvider
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -104,14 +112,18 @@ import androidx.datastore.preferences.preferencesDataStore
 import androidx.lifecycle.lifecycleScope
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.location.LocationServices
+import com.mayakapps.kache.InMemoryKache
+import com.mayakapps.kache.KacheStrategy
 import kotlinx.coroutines.CoroutineScope
 import okhttp3.MultipartBody
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import kotlin.math.max
 import java.util.Locale
 import kotlinx.coroutines.flow.first
+import java.util.concurrent.TimeUnit
+import kotlin.collections.emptyList
+
 
 val Context.dataStore by preferencesDataStore("settings")
 val LANGUAGE_KEY = stringPreferencesKey("language")
@@ -170,6 +182,16 @@ object SearchedPlayer {
 
     }
 }
+
+val SplashURLCache = InMemoryKache<Int, String>(maxSize = 100){
+    strategy = KacheStrategy.LRU
+}
+
+data class CarouselItem(
+    val id: Int,
+    val url: String?,
+    )
+
 
 data class Match (
     val team1: List<JSONObject>,
@@ -789,7 +811,7 @@ fun TopLayout(
                             scope.launch {
                                 context.dataStore.edit { it[LANGUAGE_KEY] = lang }
                             }
-                            (context as android.app.Activity).recreate()
+                            (context as Activity).recreate()
                         }
                     }
                 )
@@ -942,7 +964,7 @@ fun HomeScreen(navController: NavController) {
             when (selectedTab) {
                 0 -> Dashboard(isFound, hasSearched)
                 1 -> Leaderboard()
-                2 -> ChampionRotations(isFound)
+                2 -> ChampionRotations()
             }
         }
     }
@@ -1511,7 +1533,7 @@ fun PlayerCard(player: Player, position: Int) {
 fun MatchCard(match: Match, color: Color){
     Card(
         colors = CardDefaults.cardColors(color),
-        shape = _root_ide_package_.androidx.compose.ui.graphics.RectangleShape,
+        shape = RectangleShape,
         modifier = Modifier
             .fillMaxWidth()
             .height(150.dp),
@@ -1627,37 +1649,68 @@ fun MatchCard(match: Match, color: Color){
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChampionRotations(isLogged: Boolean){
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        if (isLogged) {
-            Text("Champion rotations", fontSize = 22.sp)
-        }
-        else {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = Color.Gray
-                )
+fun ChampionRotations() {
 
-                Spacer(modifier = Modifier.height(16.dp))
+    var items by remember { mutableStateOf<List<CarouselItem>>(emptyList())}
+    var loading by remember { mutableStateOf(true) }
 
-                Text(
-                    text = "As an unauthenticated user you can only search players.",
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                    color = Color.Gray,
-                    lineHeight = 24.sp
-                )
-            }
+    LaunchedEffect(Unit) {
+        items = getChampsCache()
+        loading = false
+    }
+    if (loading)
+    {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
         }
+    }
+    else {
+        HorizontalCenteredHeroCarousel(
+            state = rememberCarouselState() { items.count() },
+            modifier = Modifier.fillMaxWidth()
+                .fillMaxHeight()
+                .padding(top = 16.dp, bottom = 16.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            itemSpacing = 10.dp
+        ) { i ->
+            val item = items[i]
+            AsyncImage(
+                model = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/${item.url}",
+                contentDescription = "Champion Icon",
+                modifier = Modifier
+                    .fillMaxWidth()
+            )
+        }
+    }
+}
+
+suspend fun getFreeChampionIds(): List<Int>{
+    val url = "http://10.0.2.2:8080/api/champion/free-rotation"
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(url)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+
+        val jsonString = response.body!!.string()
+        val rootObj = JSONObject(jsonString)
+        val championList = rootObj.getJSONArray("champion_array")
+        val size = championList.length()
+        val ids = mutableListOf<Int>()
+        for (i in 0 until size)
+        {
+            ids.add(championList[i].toString().toInt())
+        }
+        return ids
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
+        return emptyList()
+    } finally {
+        response.close();
     }
 }
 
@@ -1738,5 +1791,48 @@ fun changeLanguage(lang: String, context: Context, scope: CoroutineScope) {
     scope.launch {
         context.dataStore.edit { it[LANGUAGE_KEY] = lang }
     }
-    (context as android.app.Activity).recreate()
+    (context as Activity).recreate()
+}
+
+suspend fun getChampionLoadScreenPath(championId: Int): String {
+    val url = "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/champions/$championId.json"
+    val client = OkHttpClient()
+    val request = Request.Builder()
+        .url(url)
+        .build()
+    val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+        val jsonData = response.body!!.string()
+        val jsonObj = JSONObject(jsonData)
+        val skinsArray = jsonObj.getJSONArray("skins")
+        val baseSkin = skinsArray.getJSONObject(0)
+        val fullPath = baseSkin.getString("loadScreenPath")
+        val sliced = fullPath.substring(21).lowercase()
+        SplashURLCache.put(championId,sliced)
+        return sliced
+    } catch (e: Exception) {
+        Log.e("SERVER_ERROR", "Server error", e)
+    } finally {
+        response.close();
+    }
+    return ""
+}
+
+suspend fun getChampsCache(): List<CarouselItem>
+{
+    val ids = getFreeChampionIds()
+
+    val itemList = mutableListOf<CarouselItem>()
+
+    val kacheKeys = SplashURLCache.getKeys()
+    if(kacheKeys.isEmpty()) {
+        ids.forEach {
+            SplashURLCache.put(it, getChampionLoadScreenPath(it))
+        }
+    }
+    SplashURLCache.getKeys().forEach {
+        itemList.add(CarouselItem(it, SplashURLCache.get(it)))
+    }
+    return itemList
 }
