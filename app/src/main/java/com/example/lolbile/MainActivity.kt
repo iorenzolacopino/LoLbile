@@ -133,74 +133,100 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity
+import android.widget.Switch
+import androidx.compose.runtime.saveable.rememberSaveable
+import okhttp3.internal.platform.android.ConscryptSocketAdapter
+
 
 val Context.dataStore by preferencesDataStore("settings")
 val LANGUAGE_KEY = stringPreferencesKey("language")
 
-class MainActivity : AppCompatActivity() {
-    private lateinit var lightManager: LightSensorManager
+var isDarkMode by mutableStateOf(false)
+
+
+class MainActivity : AppCompatActivity(),  SensorEventListener {
+    private lateinit var sensorManager: SensorManager
+    private var brightness: Sensor? = null
 
     @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
     override fun onCreate(savedInstanceState: Bundle?) {
-
         super.onCreate(savedInstanceState)
 
-        lightManager = LightSensorManager(this)
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+
+
+        setUpSensor()
 
         setContent {
-            LoLbileTheme {
+
+            var isDarkTheme by rememberSaveable { mutableStateOf(false) }
+
+            LaunchedEffect(isDarkMode)
+            {
+                Log.d("THEME", "switching mode")
+                isDarkTheme = isDarkMode
+            }
+            LoLbileTheme(darkTheme = isDarkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
+                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
                     Navigation()
                 }
             }
         }
     }
 
+    private fun setUpSensor() {
+        sensorManager = getSystemService(SENSOR_SERVICE) as SensorManager
+        brightness = sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
+    }
+
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_LIGHT) {
+            val light1 = event.values[0]
+            if(light1 > 2000)
+            {
+                Log.d("LIGHT SENSOR", "Switching to LIGHT MODE")
+                isDarkMode = false
+            }
+            else
+            {
+                Log.d("LIGHT SENSOR", "Switching to DARK MODE")
+                isDarkMode = true
+            }
+
+        }
+    }
+    private fun brightness(brightness: Float): String {
+
+        return when (brightness.toInt()) {
+            0 -> "Pitch black"
+            in 1..10 -> "Dark"
+            in 11..50 -> "Grey"
+            in 51..5000 -> "Normal"
+            in 5001..25000 -> "Incredibly bright"
+            else -> "This light will blind you"
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        return
+    }
+
     override fun onResume() {
         super.onResume()
-        lightManager.start()
+        sensorManager.registerListener(this, brightness, SensorManager.SENSOR_DELAY_NORMAL)
     }
+
 
     override fun onPause() {
         super.onPause()
-        lightManager.stop()
-    }
-}
-
-class LightSensorManager(private val context: Context) : SensorEventListener {
-
-    private val sensorManager =
-        context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-
-    private val lightSensor: Sensor? =
-        sensorManager.getDefaultSensor(Sensor.TYPE_LIGHT)
-
-    fun start() {
-        lightSensor?.also {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_NORMAL)
-        }
-    }
-
-    fun stop() {
         sensorManager.unregisterListener(this)
     }
-
-    override fun onSensorChanged(event: SensorEvent) {
-        val lux = event.values[0]
-
-        if (lux < 40) {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-        } else {
-            AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-        }
-    }
-
-    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
-
 var hasSearched by mutableStateOf(false)
 
 object UserSession {
@@ -256,6 +282,28 @@ data class Player (
     val lp: Int
 )
 
+
+@Composable
+fun switchTheme()
+{
+    var isDarkTheme by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(isDarkMode)
+    {
+        Log.d("THEME", "switching mode")
+        isDarkTheme = isDarkMode
+    }
+
+    LoLbileTheme(darkTheme = isDarkTheme) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+        ) {
+            Button(onClick = { isDarkTheme = !isDarkTheme }) {
+                Text(text = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode")
+            }
+        }
+    }
+}
 @RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
 @Composable
 fun LoginScreen(navController: NavController) {
@@ -1837,15 +1885,8 @@ fun countryToLanguage(country: String): String {
     }
 }
 
-fun setAppLanguage(context: Context, localeTag: String) {
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-        context.getSystemService(LocaleManager::class.java).applicationLocales =
-            LocaleList.forLanguageTags(localeTag)
-    } else {
-        AppCompatDelegate.setApplicationLocales(
-            LocaleListCompat.forLanguageTags(localeTag)
-        )
-    }
+fun setAppLanguage(localeTag: String) {
+    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(localeTag))
 }
 
 suspend fun getChampionLoadScreenPath(championId: Int): String {
