@@ -3,17 +3,27 @@ package com.example.lolbile
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Context
-import android.content.res.Configuration
 import android.credentials.GetCredentialException
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.location.Geocoder
+import android.location.Location
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
-import androidx.activity.ComponentActivity
+import android.view.View
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.animation.VectorConverter
+import androidx.appcompat.app.ActionBar
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -27,8 +37,8 @@ import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -36,7 +46,10 @@ import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
 import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.*
+import androidx.compose.material3.carousel.HorizontalCenteredHeroCarousel
+import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -46,12 +59,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -63,9 +77,13 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.ColorUtils
+import androidx.core.content.FileProvider
+import androidx.core.os.LocaleListCompat
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
 import androidx.graphics.shapes.CornerRounding
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
@@ -73,69 +91,31 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.*
 import coil.compose.AsyncImage
 import com.example.lolbile.ui.theme.LoLbileTheme
-import android.graphics.Bitmap
-import android.location.Geocoder
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.PickVisualMediaRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.collection.emptyLongSet
-import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.rememberCoroutineScope
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.GooglePlayServicesUtil.getErrorString
+import com.google.android.gms.common.GooglePlayServicesUtilLight.isGooglePlayServicesAvailable
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.mayakapps.kache.InMemoryKache
+import com.mayakapps.kache.KacheStrategy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONArray
 import org.json.JSONObject
 import ru.gildor.coroutines.okhttp.await
-import kotlin.math.max
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material3.carousel.HorizontalCenteredHeroCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
-import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.unit.max
-import androidx.core.content.FileProvider
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import androidx.lifecycle.lifecycleScope
-import com.google.android.gms.auth.api.signin.GoogleSignIn
-import com.google.android.gms.location.LocationServices
-import com.mayakapps.kache.InMemoryKache
-import com.mayakapps.kache.KacheStrategy
-import kotlinx.coroutines.CoroutineScope
-import okhttp3.MultipartBody
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.util.Locale
-import kotlinx.coroutines.flow.first
-import androidx.compose.ui.res.stringResource
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
-import java.util.concurrent.TimeUnit
-import kotlin.collections.emptyList
-import android.hardware.Sensor
-import android.hardware.SensorEvent
-import android.hardware.SensorEventListener
-import android.hardware.SensorManager
-import android.widget.Toast;
-import androidx.appcompat.app.AppCompatActivity
-import android.widget.Switch
-import androidx.compose.runtime.saveable.rememberSaveable
-import okhttp3.internal.platform.android.ConscryptSocketAdapter
+import kotlin.math.max
 
 
 val Context.dataStore by preferencesDataStore("settings")
@@ -143,6 +123,7 @@ val LANGUAGE_KEY = stringPreferencesKey("language")
 
 var isDarkMode by mutableStateOf(false)
 
+private lateinit var fusedLocationClient: FusedLocationProviderClient
 
 class MainActivity : AppCompatActivity(),  SensorEventListener {
     private lateinit var sensorManager: SensorManager
@@ -153,7 +134,10 @@ class MainActivity : AppCompatActivity(),  SensorEventListener {
         super.onCreate(savedInstanceState)
 
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
+        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN
+        actionBar?.hide()
 
         setUpSensor()
 
@@ -171,7 +155,6 @@ class MainActivity : AppCompatActivity(),  SensorEventListener {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags("en"))
                     Navigation()
                 }
             }
@@ -296,7 +279,9 @@ fun switchTheme()
 
     LoLbileTheme(darkTheme = isDarkTheme) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
         ) {
             Button(onClick = { isDarkTheme = !isDarkTheme }) {
                 Text(text = if (isDarkTheme) "Switch to Light Mode" else "Switch to Dark Mode")
@@ -904,6 +889,7 @@ fun TopLayout(
                     onClick = {
                         langMenu = false
                         detectCountry(context) { country ->
+                            Log.d("COUNTRY CODE", "current country code is : $country")
                             val lang = countryToLanguage(country)
                             setAppLanguage(lang)
                             (context as Activity).recreate()
@@ -1862,14 +1848,20 @@ fun detectCountry(
     context: Context,
     onResult: (String) -> Unit
 ) {
-    val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-    fusedLocationClient.lastLocation.addOnSuccessListener { location ->
+
+    Log.d("COUNTRY CODE", "is google play available: ${getErrorString(isGooglePlayServicesAvailable(context))}")
+    Log.d("COUNTRY CODE", "current country code is")
+    Log.d("COUNTRY CODE", "last location is: ${fusedLocationClient.lastLocation}")
+    fusedLocationClient.lastLocation.addOnSuccessListener { location : Location?->
+        Log.d("COUNTRY CODE", "last location is: ${fusedLocationClient.lastLocation}")
         if (location != null) {
             val geocoder = Geocoder(context, Locale.getDefault())
             val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
             val countryCode = addresses?.firstOrNull()?.countryCode ?: "UK"
+            Log.d("COUNTRY CODE", "current country code is: $countryCode")
             onResult(countryCode)
         } else {
+            Log.d("COUNTRY CODE", "current country code is")
             onResult("UK")
         }
     }
