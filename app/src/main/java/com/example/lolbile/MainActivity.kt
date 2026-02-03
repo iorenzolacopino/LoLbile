@@ -1221,11 +1221,11 @@ fun createImageUri(context: Context): Uri {
 }
 
 suspend fun updateUsername(username: String): Boolean = withContext(Dispatchers.IO) {
-    try {
+
         val client = OkHttpClient()
 
         val json = JSONObject().apply {
-            put("username", username)
+            put("username", username).put("token", UserSession.appAuthToken)
         }
 
         val body = json.toString()
@@ -1234,11 +1234,12 @@ suspend fun updateUsername(username: String): Boolean = withContext(Dispatchers.
         val request = Request.Builder()
             .url("http://10.0.2.2:8080/api/account")
             .patch(body)
-            .addHeader("google_id", "${UserSession.appAuthToken}")
             .build()
 
-        val response = client.newCall(request).execute()
-        response.isSuccessful
+        val response = client.newCall(request).await()
+    try {
+        if (!response.isSuccessful) throw IOException("Unexpected code $response")
+        true
 
     } catch (e: Exception) {
         Log.e("USERNAME_UPDATE", "Error", e)
