@@ -695,6 +695,7 @@ suspend fun loginPass(email: String,password: String): Boolean{
                     {
                         UserSession.userPhotoUrl = "http://34.120.96.92/$profileImageUrl"
                     }
+                    else UserSession.userPhotoUrl = null
                     UserSession.userName = jsonObj.getString("username")
                     UserSession.appAuthToken = jsonObj.getString("token")
                     Log.i("TOKEN", "This is the token: ${UserSession.appAuthToken}")
@@ -867,6 +868,19 @@ fun TopLayout(
     val isHome = currentRoute == "home"
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            detectCountry(context) { country ->
+                val lang = countryToLanguage(country)
+                setAppLanguage(lang)
+                (context as Activity).recreate()
+            }
+        } else {
+            Toast.makeText(context, "Permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -891,12 +905,11 @@ fun TopLayout(
                     onClick = {
                         langMenu = false
                         detectCountry(context) { country ->
-                            Log.d("COUNTRY CODE", "current country code is : $country")
                             val lang = countryToLanguage(country)
-                            setAppLanguage(lang)
-                            (context as Activity).recreate()
-                            scope.launch {
+                            scope.launch(Dispatchers.Main) {
                                 context.dataStore.edit { it[LANGUAGE_KEY] = lang }
+                                setAppLanguage(lang)
+                                (context as? Activity)?.recreate()
                             }
                         }
                     }
@@ -925,14 +938,39 @@ fun TopLayout(
                         langMenu = false
                     }
                 )
-                /*
+                DropdownMenuItem(
+                    text = { Text("Deutsch") },
+                    onClick = {
+                        scope.launch {
+                            context.dataStore.edit { it[LANGUAGE_KEY] = "de" }
+                        }
+                        setAppLanguage("de")
+                        (context as Activity).recreate()
+                        langMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Español") },
+                    onClick = {
+                        scope.launch {
+                            context.dataStore.edit { it[LANGUAGE_KEY] = "es" }
+                        }
+                        setAppLanguage("es")
+                        (context as Activity).recreate()
+                        langMenu = false
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Français") },
                     onClick = {
-                        changeLanguage("fr", context, scope)
+                        scope.launch {
+                            context.dataStore.edit { it[LANGUAGE_KEY] = "fr" }
+                        }
+                        setAppLanguage("fr")
+                        (context as Activity).recreate()
                         langMenu = false
                     }
-                )*/
+                )
             }
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                 Text("LoLbile", fontWeight = FontWeight.Bold, fontSize = 20.sp)
@@ -1867,21 +1905,26 @@ fun detectCountry(
     context: Context,
     onResult: (String) -> Unit
 ) {
-
-    Log.d("COUNTRY CODE", "is google play available: ${getErrorString(isGooglePlayServicesAvailable(context))}")
-    Log.d("COUNTRY CODE", "current country code is")
-    Log.d("COUNTRY CODE", "last location is successful?: ${fusedLocationClient.lastLocation}")
-    fusedLocationClient.lastLocation.addOnSuccessListener { location : Location?->
-        Log.d("COUNTRY CODE", "last location is: ${fusedLocationClient.lastLocation}")
+    fusedLocationClient.getCurrentLocation(
+        com.google.android.gms.location.Priority.PRIORITY_HIGH_ACCURACY,
+        null
+    ).addOnSuccessListener { location: Location? ->
         if (location != null) {
             val geocoder = Geocoder(context, Locale.getDefault())
-            val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
-            val countryCode = addresses?.firstOrNull()?.countryCode ?: "UK"
-            Log.d("COUNTRY CODE", "current country code is: $countryCode")
-            onResult(countryCode)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                geocoder.getFromLocation(location.latitude, location.longitude, 1) { addresses ->
+                    val countryCode = addresses.firstOrNull()?.countryCode ?: "US"
+                    (context as? Activity)?.runOnUiThread { onResult(countryCode) }
+                }
+            } else {
+                try {
+                    val addresses = geocoder.getFromLocation(location.latitude, location.longitude, 1)
+                    onResult(addresses?.firstOrNull()?.countryCode ?: "US")
+                } catch (e: Exception) { onResult("US") }
+            }
         } else {
-            Log.d("COUNTRY CODE", "current country code is")
-            onResult("UK")
+            Log.e("GPS_ERROR", "Location not found")
+            onResult("US")
         }
     }
 }

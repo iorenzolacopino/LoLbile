@@ -1,0 +1,17 @@
+<resources>
+    <string name="app_name">LoLbile</string>
+    <string name="welcome">Bienvenue sur LoLbile</string>
+    <string name="or">ou</string>
+    <string name="first_time">Si c\'est votre première visite, inscrivez-vous</string>
+    <string name="create_account">Créer un compte</string>
+    <string name="already_have_account">Vous avez déjà un compte? Se connecter</string>
+    <string name="login_google">Se connecter avec Google</string>
+    <string name="register">Registre</string>
+    <string name="search">Recherche</string>
+    <string name="settings">Paramètres</string>
+    <string name="search_players">Rechercher des joueurs...</string>
+    <string name="save_changes">Enregistrer les modifications</string>
+    <string name="search_player">Recherche d\'un joueur</string>
+    <string name="leaderboard">Classement (top 20)</string>
+    <string name="not_found">Le joueur est introuvable</string>
+</resources>
