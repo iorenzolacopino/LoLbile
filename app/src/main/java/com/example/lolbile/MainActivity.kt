@@ -1186,7 +1186,8 @@ fun SettingsScreen(navController: NavController) {
                             newAvatarUrl = getProfileImage()
                             avatarOk = newAvatarUrl != null
                             if (avatarOk) {
-                                UserSession.userPhotoUrl = newAvatarUrl
+                                Log.e("test",newAvatarUrl)
+                                UserSession.userPhotoUrl = "http://34.120.96.92/${newAvatarUrl}"
                             }
                         }
 
@@ -1270,8 +1271,9 @@ suspend fun updateProfileImage(imageUri: Uri, context: Context){
 suspend fun getProfileImage() : String
 {
     val client = OkHttpClient()
-    val url = "http://10.0.2.2/api/account/image"
+    val url = "http://10.0.2.2:8080/api/account/image"
     val request = Request.Builder()
+        .addHeader("Authorization", "${UserSession.appAuthToken}")
         .url(url)
         .build()
     val response = client.newCall(request).await()
